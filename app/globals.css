@@ -1,0 +1,255 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Myanmar:wght@400;500;600&family=Playfair+Display:wght@400;500&display=swap');
+:root{color-scheme:light;--ink:#273f3b;--muted:#78847a;--cream:#f9f7ee;--orange:#bd7148}*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:'DM Sans','Noto Sans Myanmar',sans-serif}button,input,textarea{font:inherit}button{cursor:pointer;color:inherit}button:focus-visible,a:focus-visible{outline:3px solid #c17b47;outline-offset:4px}button{border:0}button:disabled{opacity:.5;cursor:wait}main{max-width:1440px;margin:auto;padding:0 56px}header{height:99px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e4e6db}.brand{display:flex;gap:12px;text-decoration:none;color:var(--ink);font-size:36px}.brand>span{font-family:'Playfair Display',serif;font-size:25px;line-height:1.2}.brand small{display:block;font:9px 'DM Sans',sans-serif;letter-spacing:2.3px;margin-top:8px}nav{display:flex;gap:14px;align-items:center}nav button{display:flex;align-items:center;gap:9px;background:transparent;font-size:12px;padding:9px 12px}nav i{font-size:10px;font-style:normal;background:#e9e9db;border-radius:50%;padding:3px 6px}nav .language{border:1px solid #d9dfd2;border-radius:6px}.intro{text-align:center;padding:34px 0 29px}.eyebrow{font-size:10px;letter-spacing:2px;font-weight:600;color:#9b805e}.intro .eyebrow span{display:inline-block;width:5px;height:5px;background:#bd895a;border-radius:50%;margin-right:8px}h1{font:500 44px/1.3 'Playfair Display','Noto Sans Myanmar',serif;margin:12px 0;color:#2c4740}.intro p{font-size:13px;color:var(--muted);margin:10px 0}.game{border-radius:15px;border:1px solid #dce0d1;overflow:hidden;box-shadow:0 12px 35px #283f3510}.scene{position:relative;width:100%;aspect-ratio:1200/650;overflow:hidden;background:#1c3049}.landscape{width:100%;height:100%;position:absolute;inset:0}.scene-note{position:absolute;left:23px;top:21px;color:#fff5db;background:#263d4ac9;padding:10px 12px;font-size:8px;letter-spacing:1.7px;border:1px solid #ffffff18;border-radius:5px;display:flex;align-items:center;gap:7px}.live-dot{width:5px;height:5px;background:#e7c783;border-radius:50%}.moon-note{position:absolute;right:23px;top:24px;font:italic 12px 'Playfair Display',serif;color:#f7e5b8}.spot{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:6px;background:#f7f1dce8;box-shadow:0 3px 10px #1c303b33;border:1px solid #e8d7b1;color:#3b5149;border-radius:20px;padding:8px;font-size:9px;z-index:5;transition:.2s}.spot span{display:none}.spot:hover span,.spot.near span{display:inline}.spot.near{background:#fff2c9;box-shadow:0 0 0 4px #f4dfab25}.spot.complete{border-color:#c1ab6a}.player,.npc{position:absolute;width:6.4%;height:20%;transform:translate(-50%,-84%);z-index:6;pointer-events:none}.player .person,.npc .person{width:100%;height:100%}.npc{width:5.5%;height:18%;z-index:4}.friend-one{left:17%;top:79%}.friend-two{left:27%;top:80%}.friend-three{left:36%;top:80%}.name-tag{position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#fff7de;color:#40594a;padding:4px 8px;border-radius:5px;white-space:nowrap;font-size:10px;box-shadow:0 3px 8px #0001}.name-tag small{font-size:6px;background:#e3dbb9;margin-left:3px;padding:2px;border-radius:2px}.scene-bottom{position:absolute;bottom:0;left:0;right:0;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(transparent,#1a383772);font-size:10px;color:#f8eed2}.scene-bottom>span{font-family:'Playfair Display',serif;font-style:italic}.scene-bottom button{display:flex;gap:6px;align-items:center;background:#203b3f99;color:#fff0ce;border-radius:5px;font-size:9px;padding:7px 10px}.game-toolbar{display:flex;justify-content:space-between;align-items:center;background:#fffdf6;padding:15px 23px}.player-info{display:flex;gap:10px;align-items:center}.mini-avatar{height:40px;width:40px;border-radius:50%;background:#f0e6d4;overflow:hidden}.mini-avatar svg{width:40px;height:60px}.player-info b{font-size:12px}.player-info small{display:block;font-size:9px;color:#8a8e7e;margin-top:4px}.keyboard-hint{display:flex;align-items:center;gap:3px}kbd{width:22px;height:22px;border-radius:4px;background:#f5f3e9;border:1px solid #d8dece;text-align:center;line-height:21px;color:#798270}.keyboard-hint span{font-size:10px;margin-left:6px;color:#869080}.progress{display:grid;grid-template-columns:auto auto;gap:4px 10px;align-items:center}.progress>span{font-size:11px}.progress>div{display:flex;gap:4px}.progress i{width:15px;height:5px;background:#e9e9d8;border-radius:4px}.progress i.filled{background:#a9b690}.progress small{font-size:8px;color:#8b9484;grid-column:1/3;text-align:right}.activities{padding:28px 0 32px}.section-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.section-heading h2{font:500 21px 'Playfair Display','Noto Sans Myanmar',serif;margin:0}.section-heading span{font-size:10px;color:#919785}.activity-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.activity{display:flex;position:relative;text-align:left;padding:17px 15px;gap:12px;background:#fffdf7;border:1px solid #e3e5d8;border-radius:9px;align-items:center;transition:.2s}.activity:hover{transform:translateY(-3px);border-color:#c6bd9f;box-shadow:0 5px 12px #384a3910}.activity-icon{height:45px;width:43px;min-width:43px;display:grid;place-items:center;background:#f6e7d2;color:#b58952;border-radius:10px}.color1,.color5{background:#f4e0df;color:#bf8a83}.color2{background:#f4ebc9;color:#b99a4d}.color3{background:#e1ebdf;color:#6b977c}.color4{background:#eae3d5;color:#a18a67}.activity-no{font-size:8px;letter-spacing:1px;color:#a8ac98}.activity b{font-size:11px;font-weight:600;display:block;margin:3px 0 5px}.activity small{font-size:9px;color:#909580;display:block}.activity-arrow{font-size:15px;color:#aeb59e;margin-left:auto}.finished{background:#f5f7eb}footer{display:flex;justify-content:space-between;padding:20px 0 27px;border-top:1px solid #e3e5d8;font-size:10px;color:#929980}.overlay{position:fixed;inset:0;background:#172f3c85;backdrop-filter:blur(7px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}.modal{background:#fffaf0;border:1px solid #e9dbc2;box-shadow:0 30px 100px #132b3e55;width:480px;max-height:90dvh;overflow:auto;border-radius:18px;padding:35px;position:relative;text-align:center;animation:appear .4s ease both}.close{position:absolute;right:13px;top:13px;background:transparent;display:grid;place-items:center;padding:6px;color:#8c9581}.modal-spark{font-size:39px;color:#c38c4e;display:block;margin-bottom:9px}.modal h2{font:500 28px/1.4 'Playfair Display','Noto Sans Myanmar',serif;margin:12px 0}.modal p{font-size:12px;line-height:1.9;color:#84907c}.avatars{display:flex;gap:10px;margin:24px 0}.avatars button{position:relative;background:#f1eddf;border:2px solid transparent;border-radius:12px;width:25%;height:110px;padding:6px}.avatars svg{height:100%;width:100%}.avatars .selected{background:#e4ebde;border-color:#80957b}.avatars button span{position:absolute;bottom:-8px;right:-5px;background:#718b73;color:white;font-size:10px;padding:3px 6px;border-radius:50%}form{text-align:left}label{display:block;font-size:11px;font-weight:600;margin-bottom:8px}input,textarea{width:100%;padding:12px 14px;background:#fffef8;border:1px solid #dcdccb;border-radius:7px;color:#344a3f;outline-color:#9ca986;font-size:13px}textarea{resize:vertical;line-height:1.8}form small{font-size:9px;color:#979d88;display:block;margin-top:7px}.primary{background:#3f6151;color:#fff8df;display:flex;justify-content:space-between;align-items:center;width:100%;padding:14px 18px;border-radius:7px;font-size:12px;margin-top:17px}.primary:hover{background:#304d40}.modal-foot{font-size:9px;color:#9ca18c;display:block;margin-top:19px}.toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);border:1px solid #c3cbaa;background:#fff9e9;box-shadow:0 6px 20px #132b3c26;padding:15px 25px;border-radius:10px;font-size:12px;z-index:70;max-width:90vw;width:max-content}.help{position:fixed;bottom:90px;right:30px;width:290px;background:#fff9e9;border:1px solid #ded9bc;padding:20px;border-radius:12px;z-index:25;box-shadow:0 10px 40px #203f3026}.help h3{font:22px 'Playfair Display',serif}.help p{font-size:12px;line-height:1.9;color:#7b856e}.dpad{display:flex;gap:5px;position:fixed;bottom:18px;left:20px;z-index:20}.dpad button{width:42px;height:42px;background:#faf7e8e8;color:#385642;border:1px solid #c3cbb5;border-radius:10px;touch-action:none;user-select:none;box-shadow:0 3px 10px #203e2522}.dpad button:active{background:#c8d5b6}.wish-object{position:absolute;transform:translate(-50%,-50%);background:transparent;border:0;z-index:7;padding:10px;animation:float 5s ease-in-out infinite;filter:drop-shadow(0 0 9px #ffe9a766);font-size:25px}.wish-object small{position:absolute;right:4px;bottom:8px;font-size:11px;color:#fff4ca}.sky-lantern{display:block;width:23px;height:32px;border-radius:8px 8px 5px 5px;background:linear-gradient(#ffe9b0,#f1ac71);border:1px solid #ffdca1;box-shadow:inset 0 -5px 6px #ffeaaf,0 0 15px #ffc78366}.sky-lantern:after{content:'';display:block;height:2px;background:#c58359;position:absolute;bottom:12px;width:23px}.lotus{font-size:26px}.wish-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:45vh;overflow:auto;margin-top:20px}.wish-cards button{display:grid;gap:8px;text-align:left;background:#f3ecda;border-radius:8px;padding:15px}.wish-cards button:nth-child(3n){background:#e6eddf}.wish-cards span{color:#b78960}.wish-cards b{font-size:12px}.wish-cards small{font-size:9px;color:#7b886d}.letter{position:relative;width:480px;max-height:85dvh;overflow:auto;padding:55px 42px;background:#f7d5cb;box-shadow:0 25px 80px #172b3c66;border-radius:4px;transform-origin:bottom;animation:unfold .7s ease both;border:10px solid #edc1b7;background-image:linear-gradient(0deg,transparent 49%,#bd86851a 50%,transparent 51%)}.paper1{background-color:#dce9d0;border-color:#c0d4b8}.letter-flower{font-size:48px;display:block;color:#ad6d75;margin-bottom:20px}.letter .eyebrow{font-size:9px;color:#947568}.letter p{font:25px/1.8 'Playfair Display','Noto Sans Myanmar',serif;color:#604c48;overflow-wrap:anywhere;white-space:pre-wrap}.letter .signature{display:block;text-align:right;font-size:15px;margin:30px 0;color:#8e675f}.letter>small{font-size:10px;color:#9c7c6b}.error{color:#a15d50!important}.walking .body{animation:step .24s infinite alternate}.eating .arms{animation:eat .6s infinite alternate;transform-origin:40px 45px}.giving .arms{transform:rotate(-12deg);transform-origin:40px 45px}.happy{animation:happy .6s infinite alternate}.bubble{position:absolute;top:-20px;white-space:nowrap;background:#fff0cc;padding:5px 8px;border-radius:8px;font-size:10px}.ricecake{position:absolute;top:40%;left:65%;font-size:22px;animation:happy .7s infinite alternate}@keyframes float{50%{translate:0 -10px;rotate:3deg}}@keyframes step{to{transform:translateY(-4px) rotate(3deg);transform-origin:center}}@keyframes happy{to{translate:0 -5px}}@keyframes eat{to{transform:rotate(-10deg)}}@keyframes appear{from{opacity:0;translate:0 15px}}@keyframes unfold{from{opacity:0;transform:perspective(800px) rotateX(65deg) scale(.65)}to{opacity:1;transform:perspective(800px) rotateX(0) scale(1)}}
+@media(min-width:1500px){main{max-width:1440px}.intro{padding:40px 0}.scene{max-height:640px}}
+@media(max-width:800px){main{padding:0 20px}header{height:78px}.brand{font-size:27px}.brand>span{font-size:21px}.brand small{font-size:7px}nav{gap:1px}nav button{padding:8px}nav button>span{display:none}h1{font-size:34px}.intro{padding:28px 0}.intro p{font-size:11px;line-height:1.8}.activity-grid{grid-template-columns:1fr 1fr}.activity{padding:13px 10px;gap:8px}.activity b{font-size:10px}.activity small{font-size:8px}.activity-icon{width:34px;height:38px;min-width:34px}.section-heading{align-items:flex-start;gap:12px}.section-heading span{max-width:150px;line-height:1.6}.keyboard-hint{display:none}.scene{aspect-ratio:1200/800}.scene-note{font-size:7px;left:10px;top:10px;padding:7px}.moon-note{font-size:9px;right:10px;top:14px}.spot{padding:5px}.spot svg{width:15px}.spot span{font-size:7px}.scene-bottom{padding:9px 10px}.scene-bottom>span{font-size:8px}.game-toolbar{padding:12px}.name-tag{font-size:8px;padding:3px 5px}.name-tag small{display:none}.player,.npc{width:7%;height:18%}footer{gap:15px;line-height:1.8;padding-bottom:90px}.modal{padding:28px 24px}.modal h2{font-size:24px}.dpad button{width:45px;height:45px}.section-heading h2{font-size:18px}.toast{bottom:80px}.help{bottom:85px;right:18px}.letter{padding:40px 25px}.letter p{font-size:21px}}
+@media(max-width:480px){main{padding:0 12px}h1{font-size:29px}.intro .eyebrow{font-size:8px;letter-spacing:1.5px}.scene{aspect-ratio:1.12}.landscape{object-fit:fill}.activity-grid{gap:8px}.activity-arrow{display:none}.activity small{line-height:1.6}.activity b{line-height:1.7}.section-heading span{font-size:8px;max-width:125px}.player,.npc{width:9%;height:17%}.spot.near span{max-width:60px}.avatars button{height:100px}.scene-bottom>span{max-width:170px}.game-toolbar .player-info small{font-size:8px}.progress small{font-size:7px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Paper balloons rise from the player, then settle into a gentle sky drift. */
+.wish-object.balloon{padding:4px;width:58px;height:75px;filter:drop-shadow(0 0 10px #ffe9a766)}
+.decorated-balloon{width:100%;height:100%;display:block;overflow:visible}
+.wish-object.balloon small{right:4px;bottom:13px;font-size:10px;filter:drop-shadow(0 1px 2px #624449)}
+.wish-object.releasing{z-index:9;animation:balloon-release 7s cubic-bezier(.2,.55,.35,1) both!important}
+@keyframes balloon-release{0%{left:var(--launch-x);top:var(--launch-y);transform:translate(-50%,-50%) scale(1.35) rotate(-5deg);opacity:0}8%{opacity:1}35%{transform:translate(-50%,-50%) scale(1.17) rotate(var(--drift))}70%{transform:translate(-50%,-50%) scale(1.04) rotate(-3deg)}100%{left:var(--sky-x);top:var(--sky-y);transform:translate(-50%,-50%) scale(1) rotate(0);opacity:1}}
+@media(max-width:600px){.wish-object.balloon{width:43px;height:56px}}
+@media(prefers-reduced-motion:reduce){.wish-object.releasing{animation:none!important}}
+
+/* Lotus lanterns enter the water and meander within the pond. */
+.wish-object.lotus{width:68px;height:58px;padding:2px;filter:drop-shadow(0 3px 4px #122e4544);animation:lotus-drift var(--float-duration,16s) ease-in-out infinite}
+.decorated-lotus{display:block;width:100%;height:100%;overflow:visible}
+.wish-object.lotus small{right:6px;bottom:13px;font-size:9px;color:#fff4da;text-shadow:0 1px 3px #855d69}
+.wish-object.lotus.releasing{animation:lotus-release 6s cubic-bezier(.22,.6,.4,1) both!important;z-index:7}
+.lotus-ripple{transform-origin:50px 67px;animation:pond-ripple 3.5s ease-out infinite}
+.lotus-flame{transform-origin:50px 45px;animation:lotus-flicker 1.8s ease-in-out infinite alternate}
+@keyframes lotus-release{0%{left:var(--launch-x);top:var(--launch-y);transform:translate(-50%,-50%) scale(1.15) rotate(-8deg);opacity:.2}12%{opacity:1}50%{transform:translate(-50%,-50%) scale(1.04) rotate(4deg)}100%{left:var(--sky-x);top:var(--sky-y);transform:translate(-50%,-50%) scale(1) rotate(0);opacity:1}}
+@keyframes lotus-drift{0%,100%{translate:0 0;rotate:0deg}25%{translate:7px -3px;rotate:4deg}50%{translate:2px 5px;rotate:-2deg}75%{translate:-6px 2px;rotate:-5deg}}
+@keyframes pond-ripple{0%{transform:scale(.75);opacity:.5}100%{transform:scale(1.2);opacity:0}}
+@keyframes lotus-flicker{to{transform:scaleX(.8) rotate(5deg);opacity:.85}}
+@media(max-width:600px){.wish-object.lotus{width:46px;height:40px}.wish-object.lotus small{right:1px;bottom:8px}}
+@media(prefers-reduced-motion:reduce){.wish-object.lotus,.wish-object.lotus.releasing,.lotus-ripple,.lotus-flame{animation:none!important}}
+
+/* Soft evening clouds move slowly without a visible loop reset. */
+.drifting-cloud{animation:cloud-drift 100s linear infinite;animation-delay:-20s}
+.cloud-1{animation-duration:130s;animation-delay:-70s}
+.cloud-2{animation-duration:160s;animation-delay:-110s}
+@keyframes cloud-drift{from{transform:translateX(-160px)}to{transform:translateX(1360px)}}
+.friend-two{left:21%;top:87%}.friend-three{left:39%;top:87%}
+@media(prefers-reduced-motion:reduce){.drifting-cloud{animation:none!important}}
+
+/* Pick up a rice ball, raise it to the mouth, chew, and repeat. */
+.eating .rice-ball-hand{animation:rice-ball-bite 3.4s ease-in-out infinite;transform-origin:54px 45px}
+.eating .character-mouth{transform-origin:40px 36px;animation:rice-ball-chew 3.4s ease-in-out infinite}
+.friend-three .rice-ball-hand,.friend-three .character-mouth{animation-delay:-1.6s}
+@keyframes rice-ball-bite{0%,12%,100%{transform:translate(0,0) rotate(0)}35%,56%{transform:translate(-7px,-17px) rotate(-10deg)}72%,86%{transform:translate(0,0) rotate(0)}}
+@keyframes rice-ball-chew{0%,34%,58%,100%{transform:scaleY(1)}39%,47%,55%{transform:scaleY(.45)}43%,51%{transform:scaleY(1.4)}}
+@media(prefers-reduced-motion:reduce){.rice-ball-hand,.character-mouth{animation:none!important}}
+.friend-two{left:24%;top:91%}
+
+.balloon-preview{height:130px;width:104px;margin:10px auto 15px;filter:drop-shadow(0 0 18px #e8b58b55)}
+.balloon-choices{padding:0;border:0;text-align:left;margin:18px 0}
+.balloon-choices legend{font-size:12px;font-weight:600;margin-bottom:12px}
+.colour-options{display:flex;justify-content:space-between;gap:8px}
+.colour-options button{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;border:3px solid #fffaf0;outline:1px solid #d9d6c6;color:#374c42}
+.colour-options button.selected{outline:2px solid #3f6151}
+.shape-options{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+.shape-options button{display:flex;flex-direction:column;align-items:center;border:1px solid #dedbc9;border-radius:9px;background:#f5f0e4;padding:5px 2px 9px;gap:3px}
+.shape-options button.selected{border:2px solid #718b73;background:#e8eddf;padding:4px 1px 8px}
+.shape-options svg{width:42px;height:57px}
+.shape-options span{font-size:8px;line-height:1.6}
+.chosen-balloon{display:flex;align-items:center;gap:15px;background:#f2eedf;border-radius:8px;margin:10px 0 20px;padding:10px}
+.chosen-balloon>svg{width:44px;height:60px}.change-balloon{background:transparent;font-size:11px;padding:8px 0;color:#4a6e58;text-decoration:underline}
+@media(max-width:480px){.colour-options{gap:4px}.colour-options button{width:32px;height:32px}.shape-options{gap:4px}.shape-options span{font-size:7px}}
+
+.twinkling-star{transform-box:fill-box;transform-origin:center;animation:star-twinkle 5s ease-in-out infinite}
+@keyframes star-twinkle{0%,100%{opacity:.22;transform:scale(.8)}50%{opacity:.95;transform:scale(1.25)}}
+@media(prefers-reduced-motion:reduce){.twinkling-star{animation:none!important;opacity:.65}.cloud-0{transform:translateX(150px)}.cloud-1{transform:translateX(600px)}.cloud-2{transform:translateX(1010px)}}
+
+/* Children stroll along clear ground, pulling glowing animal lanterns. */
+.festival-children{position:absolute;inset:0;pointer-events:none;z-index:4}
+.lantern-child{position:absolute;width:13%;height:auto;transform:translate(-70%,-88%)}
+.lantern-child-art{width:100%;display:block;overflow:visible}
+.child-walk{animation:child-bounce .65s ease-in-out infinite alternate;transform-origin:156px 130px}
+.child-legs{animation:child-step .65s ease-in-out infinite alternate;transform-origin:157px 115px}
+.rolling-toy{animation:toy-bob .8s ease-in-out infinite alternate;transform-origin:55px 124px;filter:drop-shadow(0 0 5px #ffe3a55c)}
+.toy-string{animation:toy-tug 1.6s ease-in-out infinite alternate}
+.child-route-0{left:51%;top:69%;animation:child-stroll-centre 34s ease-in-out infinite}
+.child-route-1{left:14%;top:72%;animation:child-stroll-left 42s ease-in-out infinite;animation-delay:-12s}
+.child-route-2{left:77%;top:51%;animation:child-stroll-right 39s ease-in-out infinite;animation-delay:-19s}
+.child-route-1 .child-walk{animation-delay:-.25s}.child-route-2 .child-walk{animation-delay:-.4s}
+@keyframes child-stroll-centre{0%,100%{left:51%;top:69%}25%{left:57%;top:72%}50%{left:57%;top:88%}75%{left:49%;top:88%}}
+@keyframes child-stroll-left{0%,100%{left:14%;top:72%}30%{left:14%;top:92%}60%{left:13%;top:93%}80%{left:13%;top:74%}}
+@keyframes child-stroll-right{0%,100%{left:75%;top:50%}35%{left:91%;top:50%}65%{left:91%;top:58%}85%{left:75%;top:58%}}
+@keyframes child-bounce{to{transform:translateY(-2px) rotate(1deg)}}
+@keyframes child-step{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}
+@keyframes toy-bob{to{transform:translateY(-1.5px) rotate(-1.5deg)}}
+@keyframes toy-tug{to{opacity:.65}}
+@media(max-width:600px){.lantern-child{width:16%}}
+@media(prefers-reduced-motion:reduce){.lantern-child,.child-walk,.child-legs,.rolling-toy,.toy-string{animation:none!important}}
+
+/* Parchment scroll, inspired by the supplied festival-letter reference. */
+.letter-overlay{background:#171b35b8;backdrop-filter:blur(8px)}
+.wish-scroll{width:min(760px,calc(100vw - 60px));max-height:84dvh;overflow:visible;padding:60px 80px 45px;border:0;border-radius:2px;color:#684522;background:radial-gradient(ellipse at 45% 40%,#f8e8be 0%,#eed5a0 62%,#c89550 100%);box-shadow:inset 0 0 38px #93602466,0 30px 90px #0007;transform-origin:center;animation:scroll-open .85s cubic-bezier(.2,.7,.2,1) both;isolation:isolate}
+.wish-scroll:before,.wish-scroll:after{content:"";position:absolute;top:-18px;bottom:-18px;width:33px;border-radius:14px;background:repeating-linear-gradient(0deg,transparent 0 19px,#b78c4c55 20px 21px),linear-gradient(90deg,#553116,#b88642 15%,#f1d69a 48%,#a16a2d 81%,#4e2d18);border-top:17px solid #55321c;border-bottom:17px solid #55321c;box-shadow:0 5px 8px #0005;z-index:3}.wish-scroll:before{left:-15px}.wish-scroll:after{right:-15px}
+.scroll-art{position:absolute;inset:18px 28px;pointer-events:none;border:1px solid #a5763a;outline:3px double #b58749;outline-offset:5px;z-index:-1}.scroll-art svg{width:100%;height:100%;position:absolute;inset:0}
+.wish-scroll .eyebrow{color:#8b5d30;position:relative;padding:5px 0;font-size:10px}.wish-scroll p{position:relative;color:#654321;font-size:25px;line-height:1.9;max-height:40dvh;overflow:auto;margin:30px 0 22px;padding:0 5px;scrollbar-width:thin}.wish-scroll .signature{color:#8b5b30;position:relative;margin:20px 0}.wish-scroll>small{display:block;position:relative;color:#91683f;font-size:10px;text-align:center}.wish-scroll .close{z-index:5;right:30px;top:23px;color:#79512d;background:#f5e2b8d9;border-radius:50%}
+@keyframes scroll-open{0%{opacity:0;clip-path:inset(-30px 46%);transform:scale(.94)}25%{opacity:1}100%{opacity:1;clip-path:inset(-35px -35px);transform:scale(1)}}
+@media(max-width:600px){.wish-scroll{padding:65px 33px 40px;width:calc(100vw - 54px)}.scroll-art{inset:18px 16px}.wish-scroll p{font-size:20px;max-height:43dvh;margin:25px 0}.wish-scroll .eyebrow{font-size:8px;letter-spacing:1px}.wish-scroll .signature{font-size:13px}.wish-scroll:before,.wish-scroll:after{width:25px}.wish-scroll:before{left:-12px}.wish-scroll:after{right:-12px}.wish-scroll .close{right:20px;top:24px}}
+@media(prefers-reduced-motion:reduce){.wish-scroll{animation:none}}
+
+.scroll-closing .wish-scroll{animation:scroll-close .85s cubic-bezier(.2,.7,.2,1) both;pointer-events:none}
+.scroll-closing{animation:scroll-backdrop-close .85s ease both}
+@keyframes scroll-close{0%{opacity:1;clip-path:inset(-35px -35px);transform:scale(1)}75%{opacity:1}100%{opacity:0;clip-path:inset(-30px 46%);transform:scale(.94)}}
+@keyframes scroll-backdrop-close{0%,65%{background:#171b35b8;backdrop-filter:blur(8px)}100%{background:transparent;backdrop-filter:blur(0)}}
+@media(prefers-reduced-motion:reduce){.scroll-closing,.scroll-closing .wish-scroll{animation:none}}
+
+.fireworks-spot{z-index:6}.firework-shop-button{background:#73516a}.firework-options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:22px 0}.firework-options button{position:relative;display:flex;flex-direction:column;gap:12px;align-items:center;background:#24354e;border:2px solid transparent;border-radius:12px;padding:17px 8px;color:#fff4d8;min-height:111px}.firework-options button.selected{border-color:#e6b468;box-shadow:0 0 0 3px #e6b46833}.firework-options button>span{font-size:40px;line-height:1;text-shadow:0 0 14px currentColor}.firework-options b{font-size:11px;font-weight:500}.firework-options svg{position:absolute;right:8px;top:8px;color:#f3d293}.firework-options button:last-child{grid-column:1/3}.firework-show{position:absolute;inset:0;z-index:12;pointer-events:none;overflow:hidden}.firework-show svg{width:100%;height:100%;filter:drop-shadow(0 0 4px #ffe3b3)}.firework-spark{opacity:0;animation:firework-burst 3.3s ease-out both}.firework-trail{stroke-dasharray:1;stroke-dashoffset:1;animation:firework-launch .65s ease-out both}.firework-flash{opacity:0;animation:firework-flash 1.1s ease-out both}.firework-status{position:absolute;top:7%;left:50%;transform:translateX(-50%);color:#ffeac0;font-size:10px;z-index:13;pointer-events:none}.sky-reaction{position:absolute;left:50%;top:-15%;transform:translateX(-50%);background:#fff8df;color:#70513e;border:1px solid #ebcd95;border-radius:11px;padding:7px 10px;white-space:nowrap;font-size:10px;z-index:15;box-shadow:0 3px 12px #17263833;animation:sky-comment 4s .7s both;pointer-events:none}.sky-reaction:after{content:'';position:absolute;bottom:-5px;left:50%;width:8px;height:8px;background:#fff8df;transform:rotate(45deg)}.friend-two .sky-reaction{animation-delay:1s;top:-35%}.friend-three .sky-reaction{animation-delay:1.3s}.child-reaction{left:71%;top:2%;font-size:9px}.watching-fireworks .lantern-child,.watching-fireworks .lantern-child-art *,.watching-fireworks .npc.happy{animation-play-state:paused!important}.watching .character-head{transform:translateY(-3px) rotate(-9deg);transform-origin:40px 42px}.watching .character-head circle[r="1.8"]{transform:translateY(-3px)}.watching-fireworks .child-head{transform:translateY(-3px) rotate(-9deg);transform-origin:156px 65px}.watching-fireworks .child-head circle[r="1.8"]{transform:translateY(-3px)}
+@keyframes firework-launch{0%{opacity:0;stroke-dashoffset:1}20%{opacity:1}85%{opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+@keyframes firework-burst{0%{opacity:0;transform:translate(0,0) scale(.2)}8%{opacity:1}45%{opacity:1;transform:translate(var(--sx),var(--sy)) scale(1)}75%{opacity:.65}100%{opacity:0;transform:translate(var(--sx),calc(var(--sy) + var(--fall))) scale(.3)}}
+@keyframes firework-flash{0%{opacity:0;transform:scale(.1)}20%{opacity:.7}100%{opacity:0;transform:scale(2)}}
+@keyframes sky-comment{0%{opacity:0;translate:0 6px}15%,80%{opacity:1;translate:0 0}100%{opacity:0;translate:0 -5px}}
+@media(max-width:600px){.sky-reaction{font-size:8px;padding:5px 6px}.firework-status{font-size:8px;top:13%}.fireworks-spot svg{width:15px}.firework-options{gap:8px}}
+@media(prefers-reduced-motion:reduce){.firework-spark{animation:firework-gentle 3.3s ease both;transform:translate(var(--sx),var(--sy))}.firework-trail{display:none}.firework-flash{animation:none}.sky-reaction{animation:firework-gentle 4s .7s both}.watching .character-head,.watching-fireworks .child-head{transform:translateY(-3px)}}
+@keyframes firework-gentle{0%,100%{opacity:0}20%,75%{opacity:1}}
+
+.watching-fireworks .spot,.watching-fireworks .wish-object{pointer-events:none}
+
+/* Soft colour washes follow each burst across the scenery and water. */
+.firework-reflections{position:absolute;inset:0;pointer-events:none;z-index:9;overflow:hidden;border-radius:inherit}.firework-light-wash{position:absolute;inset:0;opacity:0;mix-blend-mode:screen;background:radial-gradient(ellipse at var(--glow-x) 23%,color-mix(in srgb,var(--reflection-color) 40%,transparent),transparent 72%),linear-gradient(180deg,transparent 28%,color-mix(in srgb,var(--reflection-color) 17%,transparent) 72%,transparent);animation:firework-reflection 3.3s ease-out both}.pond-firework-reflection{position:absolute;left:65%;top:68%;width:34%;height:25%;border-radius:50%;background:radial-gradient(ellipse at 50% 40%,color-mix(in srgb,var(--reflection-color) 65%,transparent),transparent 65%);filter:blur(7px);transform:scaleY(.6)}
+@keyframes firework-reflection{0%{opacity:0}18%{opacity:.85}45%{opacity:.55}72%{opacity:.3}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.firework-light-wash{animation:firework-gentle 3.3s ease both}}
+
+/* Keep wish text and signature clear of the scroll's lantern (top-right) and candle (bottom-right) artwork. */
+.wish-scroll p,.wish-scroll .signature{padding-right:27%}
+@media(max-width:600px){.wish-scroll p,.wish-scroll .signature{padding-right:24%}}
+
+/* 3D garden: WebGL canvas plus HTML labels that the world positions every frame. */
+.scene.world{isolation:isolate;aspect-ratio:16/9;max-height:min(720px,78dvh);background:#1b2f4a;user-select:none;-webkit-user-select:none}
+.world-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none}
+.scene.world .scene-note,.scene.world .moon-note,.scene.world .scene-bottom,.scene.world .firework-status{z-index:120}
+.scene.world .scene-bottom{pointer-events:none}
+.scene.world .scene-bottom button{pointer-events:auto}
+.anchor{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;will-change:transform;visibility:hidden}
+.anchor .spot{position:absolute;left:0;top:0;transform:translate(-50%,-50%);pointer-events:auto;white-space:nowrap}
+.person-anchor .label-stack{position:absolute;left:0;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px}
+.person-anchor .name-tag,.person-anchor .sky-reaction,.person-anchor .bubble{position:relative;left:auto;top:auto;transform:none;white-space:nowrap}
+.person-anchor .bubble{animation:happy .7s infinite alternate}
+@media(max-width:800px){.scene.world{aspect-ratio:4/3}}
+@media(max-width:480px){.scene.world{aspect-ratio:3/4;max-height:70dvh}}
+
+/* ---------- UX pass: game first, readable type, wayfinding, wishes ---------- */
+/* Compact header so the garden is the first thing on screen. */
+header{height:68px}
+.brand{font-size:28px}
+.brand>span{font-size:22px}
+.brand small{font-size:10px;margin-top:4px;letter-spacing:2px}
+nav button{font-size:13px}
+nav i{font-size:11px}
+.game{margin-top:10px}
+.scene.world{aspect-ratio:auto;height:clamp(440px,calc(100dvh - 92px),860px);max-height:none}
+.intro.about{padding:44px 0 6px;max-width:680px;margin:0 auto}
+.intro.about h1{font-size:36px}
+.intro.about p{font-size:15px;line-height:1.75;color:#6c7768}
+.eyebrow{font-size:11px;letter-spacing:1.6px}
+.section-heading span{font-size:13px;color:#7e8673}
+.section-heading h2{font-size:24px}
+footer{font-size:12px}
+.modal p{font-size:14px;line-height:1.75;color:#6f7b69}
+label{font-size:13px}
+input,textarea{font-size:15px}
+.primary{font-size:14px}
+.optional{font-weight:400;color:#8a907e}
+
+/* Progress lives in the scene, where you can see it while playing. */
+.progress-chip{display:flex;align-items:center;gap:10px;font-size:12px;letter-spacing:.4px;padding:9px 13px}
+.progress-dots{display:flex;gap:4px}
+.progress-dots i{width:16px;height:5px;border-radius:3px;background:#ffffff30}
+.progress-dots i.filled{background:#f4cf7c;box-shadow:0 0 8px #f4cf7c88}
+
+/* Spot markers: readable labels, shown whenever a spot is on screen and nearby. */
+.spot{font-size:12px;padding:9px 11px;gap:7px}
+.anchor[data-label="1"] .spot span,.spot:focus-visible span{display:inline}
+.spot .edge-arrow{display:none}
+/* Off-screen moments become small pointers pinned to the edge of the scene. */
+.anchor[data-off="1"] .spot{padding:8px;background:#fff6dbf0;box-shadow:0 4px 14px #10203a55}
+.anchor[data-off="1"] .spot span{display:none}
+.anchor[data-off="1"] .spot .edge-arrow{display:block;position:absolute;left:50%;top:50%;width:0;height:0;transform:rotate(var(--edge-angle)) translateX(26px);pointer-events:none}
+.anchor[data-off="1"] .spot .edge-arrow:after{content:"";position:absolute;left:-6px;top:-7px;border-left:10px solid #fff6db;border-top:7px solid transparent;border-bottom:7px solid transparent;filter:drop-shadow(0 1px 2px #0005)}
+.anchor[data-off="1"] .spot:hover span,.anchor[data-off="1"] .spot:focus-visible span{display:inline}
+.name-tag{font-size:12px;padding:5px 9px}
+.sky-reaction{font-size:12px}
+.firework-status{font-size:13px;top:62px}
+
+/* Controls and messages stay inside the scene. */
+.scene.world .dpad{position:absolute;left:max(14px,env(safe-area-inset-left,0px));bottom:14px;z-index:115;display:none}
+@media(pointer:coarse){.scene.world .dpad{display:flex}.scene.world .control-hint{display:none}}
+.scene.world .toast{position:absolute;top:60px;bottom:auto;z-index:118;font-size:14px;padding:12px 20px;max-width:calc(100% - 32px);text-align:center}
+.scene.world .scene-bottom{justify-content:flex-end;gap:12px}
+.scene.world .scene-bottom .control-hint{margin-right:auto;font:13px 'DM Sans','Noto Sans Myanmar',sans-serif;font-style:normal;color:#f8eed2d9}
+.scene.world .scene-bottom button{font-size:12px;padding:8px 12px}
+.scene-loading,.scene-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff1cf;font-size:15px;background:radial-gradient(circle at 50% 40%,#2b4766,#152640);z-index:119;text-align:center;padding:24px}
+.scene-fallback b{font:500 22px/1.4 'Playfair Display','Noto Sans Myanmar',serif}
+.scene-fallback span{max-width:380px;line-height:1.7;color:#e9dcc0}
+.loading-lantern{width:26px;height:34px;border-radius:12px;background:#f2a65a;box-shadow:0 0 30px 8px #f2a65a88;animation:lantern-breathe 1.6s ease-in-out infinite alternate}
+@keyframes lantern-breathe{to{box-shadow:0 0 50px 16px #f2a65aaa;transform:translateY(-4px)}}
+
+/* Wishes list: who, what, and a way to find it in the garden. */
+.wish-rows{list-style:none;padding:0;margin:20px 0 0;display:grid;gap:8px;max-height:48vh;overflow:auto;text-align:left}
+.wish-rows li{display:flex;align-items:stretch;gap:6px;background:#f5eedc;border-radius:10px}
+.wish-rows li.mine{background:#fbe9c4;box-shadow:inset 0 0 0 1px #e7c58a}
+.wish-open{flex:1;min-width:0;display:flex;gap:12px;align-items:flex-start;background:none;text-align:left;padding:13px 14px;border-radius:10px}
+.wish-kind{color:#b78960;font-size:16px;line-height:1.4}
+.wish-text{min-width:0;display:grid;gap:4px}
+.wish-text b{font-size:14px;display:flex;gap:8px;align-items:center}
+.wish-text b em{font-style:normal;font-size:11px;font-weight:600;background:#e9c27a;color:#4a3518;border-radius:10px;padding:2px 8px}
+.wish-text small{font-size:13px;line-height:1.5;color:#6c6a58;overflow-wrap:anywhere}
+.wish-find{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:#3f6151;color:#fff8df;border-radius:0 10px 10px 0;padding:0 12px;font-size:11px;min-width:64px}
+.wish-find:hover{background:#304d40}
+
+/* One-step balloon wish: words first, then a quick colour and shape row. */
+.balloon-designer{display:flex;gap:16px;align-items:flex-start;text-align:left;margin:16px 0 4px}
+.balloon-preview.small{width:62px;height:78px;margin:6px 0 0;flex:none}
+.balloon-pickers{flex:1;min-width:0}
+.balloon-pickers .balloon-choices{margin:0 0 12px}
+.balloon-pickers .balloon-choices legend{font-size:13px;margin-bottom:8px}
+.balloon-pickers .shape-options button{padding:4px}
+.balloon-pickers .shape-options span{font-size:11px}
+.modal small.count{display:block;text-align:right;font-size:12px;color:#8a907e;margin-top:6px}
+.modal label[for="signed"]{margin-top:14px;text-align:left}
+.public-note{background:#eef2e4;border-radius:8px;padding:10px 12px;margin:12px 0 0;font-size:13px!important;line-height:1.6!important;color:#4f6150!important;text-align:left}
+.modal .error{color:#a2493b;font-size:13px}
+.report-wish{position:relative;display:inline-flex;align-items:center;gap:6px;background:none;color:#8b6a46;font-size:12px;margin:2px auto 10px;padding:6px 8px;border-radius:6px;opacity:.85}
+.report-wish:hover{opacity:1;background:#f0d9a855}
+
+/* Finale */
+.finale-wishes{max-height:30vh}
+.copied{font-size:13px!important}
+.copied input{margin-top:8px;font-size:13px}
+.primary svg{flex:none}
+
+/* Burmese needs more line height and no letter-spacing for stacked marks. */
+html[lang="my"] body{line-height:1.75}
+html[lang="my"] .eyebrow,html[lang="my"] .progress-chip,html[lang="my"] .brand small{letter-spacing:0}
+html[lang="my"] .spot,html[lang="my"] .name-tag,html[lang="my"] .sky-reaction,html[lang="my"] .toast{line-height:1.7}
+html[lang="my"] .modal h2{line-height:1.6}
+
+@media(max-width:800px){
+  header{height:58px}
+  .brand>span{font-size:19px}
+  .brand small{font-size:9px}
+  .scene.world{height:calc(100dvh - 76px);min-height:440px}
+  .spot{font-size:11px;padding:8px}
+  .spot span{font-size:11px}
+  .name-tag{font-size:11px}
+  .progress-chip{font-size:11px;padding:8px 10px;left:10px;top:10px}
+  .scene.world .toast{top:54px;font-size:13px}
+  .intro.about h1{font-size:28px}
+  .intro.about p{font-size:14px}
+  .section-heading span{font-size:12px}
+  .balloon-designer{flex-direction:column;align-items:center}
+  .balloon-pickers{width:100%}
+}
+@media(max-width:480px){
+  .spot.near span{max-width:none}
+  .moon-note{display:none}
+  .section-heading span{font-size:12px;max-width:none}
+}
