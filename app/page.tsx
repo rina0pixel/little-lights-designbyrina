@@ -963,6 +963,12 @@ export default function Home() {
             <>
               <span className="firework-status" role="status">
                 {t("A little magic in the sky…", "ကောင်းကင်မှာ မီးပန်းလေးတွေ…")}
+                <small>
+                  {t(
+                    "Tap the garden to return to your view",
+                    "ကိုယ့်မြင်ကွင်းကို ပြန်သွားဖို့ ဥယျာဉ်ကို နှိပ်ပါ",
+                  )}
+                </small>
               </span>
             </>
           )}

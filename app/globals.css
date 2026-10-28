@@ -253,3 +253,5 @@ html[lang="my"] .modal h2{line-height:1.6}
   .moon-note{display:none}
   .section-heading span{font-size:12px;max-width:none}
 }
+.firework-status small{display:block;margin-top:4px;font-size:11px;opacity:.75;text-align:center}
+.scene.world .firework-status{background:#151a3c99;padding:8px 14px;border-radius:10px;text-align:center}

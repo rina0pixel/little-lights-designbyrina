@@ -813,6 +813,14 @@ export class FestivalWorld {
   private fireLights: THREE.PointLight[] = [];
   private skyLook = new THREE.Vector3();
   private camDt = 0;
+  // Fireworks cinematic: a wide, low shot of the garden with the bursts above the pagoda.
+  private cine: {
+    pos: THREE.Vector3;
+    target: THREE.Vector3;
+    dir: THREE.Vector3;
+    start: number;
+    skipped: boolean;
+  } | null = null;
   private route: {
     points: Position[];
     face?: number;
@@ -993,24 +1001,57 @@ export class FestivalWorld {
     this.clearFireworks();
     this.fireworkType = type;
     this.fireworkStart = this.time;
-    const fwd = new THREE.Vector3(
-      Math.sin(this.heading + this.orbitYaw),
+    // Frame the shot from the hand-picked viewpoint on the player's side of the pagoda.
+    // Each viewpoint has a clear view: through the arch, across the pond, past the table, and so on.
+    const pagoda = new THREE.Vector3(PAGODA.x, 0, PAGODA.z);
+    const viewpoints: [number, number][] = [
+      [0.6, 27], // down the path, through the lit arch
+      [17, 24], // across the pond, with its reflections
+      [-11, 18.5], // past the rice-ball table
+      [27, -8.5], // from the east lawn
+    ];
+    const playerDir = Math.atan2(this.pos.x - PAGODA.x, this.pos.z - PAGODA.z);
+    let best = viewpoints[0],
+      bestDiff = Infinity;
+    for (const vp of viewpoints) {
+      let d = Math.atan2(vp[0] - PAGODA.x, vp[1] - PAGODA.z) - playerDir;
+      d = Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
+      if (d < bestDiff) (bestDiff = d), (best = vp);
+    }
+    const narrow = this.camera.aspect < 1.2;
+    const camPos = new THREE.Vector3(best[0], narrow ? 3.4 : 3.1, best[1]);
+    const dir = new THREE.Vector3(
+      best[0] - PAGODA.x,
       0,
-      Math.cos(this.heading + this.orbitYaw),
-    );
+      best[1] - PAGODA.z,
+    ).normalize();
+    const lookAt = pagoda.clone().setY(narrow ? 11 : 9.5);
+    this.cine = {
+      pos: camPos,
+      target: lookAt,
+      dir,
+      start: this.time,
+      skipped: false,
+    };
+    // Everyone faces the show.
+    this.heading = Math.atan2(PAGODA.x - this.pos.x, PAGODA.z - this.pos.z);
+    this.orbitYaw = 0;
+    this.route = null;
+    const fwd = dir.clone().negate();
     const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
-    const centre = new THREE.Vector3(this.pos.x, 0, this.pos.z).addScaledVector(
-      fwd,
-      36,
-    );
+    const centre = pagoda.clone().addScaledVector(fwd, 4);
     this.skyLook.copy(centre).setY(17);
     const n = type === 2 ? 64 : 44;
+    const spread = narrow ? 0.55 : 1;
     [
-      [-11, 20, 0.6],
-      [10, 23, 1.6],
-      [0, 15, 2.6],
+      [-9, 16, 0.6],
+      [8.5, 19, 1.6],
+      [0, 13.5, 2.6],
     ].forEach(([off, h, delay], b) => {
-      const pos = centre.clone().addScaledVector(side, off).setY(h);
+      const pos = centre
+        .clone()
+        .addScaledVector(side, off * spread)
+        .setY(h);
       const from = centre
         .clone()
         .addScaledVector(side, off * 0.6 - 3)
@@ -1024,7 +1065,9 @@ export class FestivalWorld {
           r = Math.sqrt(1 - y * y),
           a = i * 2.39996;
         dirs.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
-        speeds.push((i % 2 ? 8 : 12.5) * (type === 1 ? 0.85 : 1));
+        speeds.push(
+          (i % 2 ? 6.8 : 10.5) * (type === 1 ? 0.85 : 1) * (narrow ? 0.8 : 1),
+        );
       }
       const colors = new Float32Array(n * 3),
         lineColors = new Float32Array(n * 6);
@@ -1211,6 +1254,10 @@ export class FestivalWorld {
       .set(this.pos.x, 0, this.pos.z)
       .addScaledVector(fwd, 18)
       .setY(13);
+  }
+  /** Leave the fireworks shot early and return to the normal follow camera. */
+  skipCinematic() {
+    if (this.cine) this.cine.skipped = true;
   }
   /** Test hook: jump the player to a spot (used by automated play-tests). */
   teleport(p: Position, heading = this.heading) {
@@ -2739,6 +2786,10 @@ export class FestivalWorld {
   /* ----- interaction ----- */
   private bindPointer(canvas: HTMLCanvasElement) {
     canvas.addEventListener("pointerdown", (e) => {
+      if (this.cine && !this.cine.skipped && this.fireworkStart >= 0) {
+        this.skipCinematic();
+        return;
+      }
       this.drag = { x: e.clientX, y: e.clientY, moved: 0 };
       canvas.setPointerCapture(e.pointerId);
     });
@@ -3189,8 +3240,20 @@ export class FestivalWorld {
     this.desiredCamera(p, target);
     const celebrating =
       !!this.celebration && this.time - this.celebration.start < 9;
-    if (watching || celebrating) {
-      // Step back, crouch a little and look up at the bursts.
+    let snap = false;
+    if (watching && this.cine && !this.cine.skipped) {
+      // Wide festival shot with a very slow push in.
+      const c = this.cine;
+      const prog = Math.min(1, (this.time - c.start) / 6);
+      p.copy(c.pos)
+        .addScaledVector(c.dir, -3 * prog)
+        .setY(c.pos.y + 0.6 * prog);
+      target.copy(c.target);
+      snap = this.calm;
+    } else if (watching && this.cine?.skipped) {
+      // Skipped: normal follow camera, tilted a little towards the sky.
+      target.lerp(this.skyLook, 0.35);
+    } else if (celebrating) {
       p.y = 2.2;
       target.lerp(this.skyLook, 0.85);
     } else if (this.focus && this.time < this.focus.until) {
@@ -3207,9 +3270,17 @@ export class FestivalWorld {
         target.copy(fp);
       }
     } else if (this.focus) this.focus = null;
-    const k =
-      1 -
-      Math.exp(-(watching || celebrating || this.focus ? 2.5 : 6) * this.camDt);
+    if (!watching && this.cine) {
+      // Show over: glide back behind the player (or cut, with reduced motion).
+      snap = this.calm;
+      this.cine = null;
+    }
+    const k = snap
+      ? 1
+      : 1 -
+        Math.exp(
+          -(watching ? 1.8 : celebrating || this.focus ? 2.5 : 6) * this.camDt,
+        );
     this.camPos.lerp(p, k);
     this.camTarget.lerp(target, k);
     this.camera.position.copy(this.camPos);
