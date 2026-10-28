@@ -8,6 +8,8 @@ import {
   POSTS,
   SHOP,
   SPOTS,
+  GARDEN_TREES,
+  ARCH,
   SPOT_FACING,
   START,
   findPath,
@@ -783,6 +785,12 @@ export class FestivalWorld {
   private candles = false;
   private spotRings: Record<string, THREE.Mesh> = {};
   private clouds: THREE.Group[] = [];
+  // Fairy lights (tree wires, arch, shop eaves) are gathered while building, then drawn as one point cloud.
+  private fairyPos: number[] = [];
+  private fairyCol: number[] = [];
+  private fairySeed: number[] = [];
+  private fairyMat!: THREE.ShaderMaterial;
+  private fireflyMat!: THREE.ShaderMaterial;
   private starMat!: THREE.ShaderMaterial;
   private water!: THREE.Mesh;
 
@@ -847,7 +855,7 @@ export class FestivalWorld {
     canvas.className = "world-canvas";
     canvas.setAttribute("aria-hidden", "true");
     host.prepend(canvas);
-    this.scene.fog = new THREE.Fog("#1b2f4a", 40, 120);
+    this.scene.fog = new THREE.Fog("#2a2d5c", 38, 115);
     this.buildSky();
     this.buildGround();
     this.buildPagoda();
@@ -856,6 +864,12 @@ export class FestivalWorld {
     this.buildPond();
     this.buildStringLanterns();
     this.buildTrees();
+    this.buildArch();
+    this.buildShopLights();
+    this.buildPondDecor();
+    this.buildFlowers();
+    this.buildFireflies();
+    this.buildFairyLights();
     this.buildSpots();
     this.buildPeople();
     this.buildFireworkLights();
@@ -1222,8 +1236,8 @@ export class FestivalWorld {
         depthWrite: false,
         fog: false,
         uniforms: {
-          top: { value: new THREE.Color("#0f1d38") },
-          bottom: { value: new THREE.Color("#2c4b64") },
+          top: { value: new THREE.Color("#10143a") },
+          bottom: { value: new THREE.Color("#4b4d86") },
         },
         vertexShader:
           "varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
@@ -1232,7 +1246,7 @@ export class FestivalWorld {
       }),
     );
     this.scene.add(sky);
-    const n = 700,
+    const n = 1500,
       pos = new Float32Array(n * 3),
       seed = new Float32Array(n);
     for (let i = 0; i < n; i++) {
@@ -1257,28 +1271,51 @@ export class FestivalWorld {
     });
     this.scene.add(new THREE.Points(g, this.starMat));
     const moonDir = new THREE.Vector3(34, 30, -120);
-    const moon = mesh(
-      new THREE.SphereGeometry(7, 24, 16),
-      new THREE.MeshBasicMaterial({ color: "#fff2c4", fog: false }),
-      moonDir.x,
-      moonDir.y,
-      moonDir.z,
+    // A soft crescent moon, as in the reference.
+    const moonTex = canvasTexture(256, 256, (g) => {
+      g.fillStyle = "#f4f1ff";
+      g.beginPath();
+      g.arc(128, 128, 100, 0, Math.PI * 2);
+      g.fill();
+      g.globalCompositeOperation = "destination-out";
+      g.beginPath();
+      g.arc(170, 104, 92, 0, Math.PI * 2);
+      g.fill();
+    });
+    const moon = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: moonTex,
+        fog: false,
+        transparent: true,
+        depthWrite: false,
+      }),
     );
+    moon.scale.set(22, 22, 1);
+    moon.position.copy(moonDir);
     this.scene.add(moon);
-    const halo = glow("#ffe9a8", 60, 0.45);
+    const halo = glow("#d9dcff", 55, 0.35);
     (halo.material as THREE.SpriteMaterial).fog = false;
     halo.position.copy(moonDir);
     this.scene.add(halo);
-    this.scene.add(new THREE.HemisphereLight("#93abd8", "#2f5040", 1.9));
-    const moonLight = new THREE.DirectionalLight("#d4e0ff", 1.3);
+    this.scene.add(new THREE.HemisphereLight("#9ea2e6", "#2b4a3c", 1.9));
+    const moonLight = new THREE.DirectionalLight("#c9cfff", 1.2);
     moonLight.position.copy(moonDir);
     this.scene.add(moonLight);
     const cloudMat = new THREE.MeshLambertMaterial({
-      color: "#3d4f6e",
+      color: "#3b3e70",
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.55,
       fog: false,
     });
+    // Low mist drifting around the edges of the garden.
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 2,
+        r = 30 + (i % 3) * 7;
+      const m = glow("#8d90cf", 22 + (i % 4) * 6, 0.1);
+      (m.material as THREE.SpriteMaterial).blending = THREE.NormalBlending;
+      m.position.set(Math.cos(a) * r, 1.5 + (i % 2), Math.sin(a) * r);
+      this.scene.add(m);
+    }
     for (let i = 0; i < 7; i++) {
       const c = new THREE.Group();
       for (let j = 0; j < 5; j++) {
@@ -1302,7 +1339,7 @@ export class FestivalWorld {
       W = 120;
     const px = (v: number) => ((v + W / 2) / W) * S;
     const tex = canvasTexture(S, S, (g) => {
-      g.fillStyle = "#4b7d64";
+      g.fillStyle = "#3f7158";
       g.fillRect(0, 0, S, S);
       for (let i = 0; i < 14000; i++) {
         g.fillStyle =
@@ -1380,7 +1417,7 @@ export class FestivalWorld {
     this.scene.add(ground);
     const far = mesh(
       new THREE.PlaneGeometry(600, 600),
-      std("#3a6853", { roughness: 1 }),
+      std("#335f4c", { roughness: 1 }),
       0,
       -0.05,
       0,
@@ -1417,7 +1454,7 @@ export class FestivalWorld {
     }
     this.scene.add(tufts);
     // Low hills on the horizon.
-    const hillMat = [std("#2b4f5a"), std("#30585a"), std("#264556")];
+    const hillMat = [std("#2d3560"), std("#343c6a"), std("#283058")];
     for (const [x, z, r, i] of [
       [-70, -95, 55, 0],
       [-10, -120, 70, 1],
@@ -1804,11 +1841,11 @@ export class FestivalWorld {
   private buildPond() {
     this.water = mesh(
       new THREE.CircleGeometry(1, 64),
-      std("#245a70", {
-        metalness: 0.35,
-        roughness: 0.12,
-        emissive: "#0c2534",
-        emissiveIntensity: 0.6,
+      std("#27466f", {
+        metalness: 0.45,
+        roughness: 0.06,
+        emissive: "#111c3c",
+        emissiveIntensity: 0.7,
       }),
       POND.x,
       0.04,
@@ -2008,39 +2045,604 @@ export class FestivalWorld {
       this.scene.add(l);
     }
   }
-  private buildTrees() {
-    const trunk = std("#4f3a31"),
-      leaves = [
-        std("#346a55", { flatShading: true }),
-        std("#2b5d4b", { flatShading: true }),
-        std("#3f7a5e", { flatShading: true }),
-      ];
-    const tree = (x: number, z: number, s: number, i: number) => {
-      const g = new THREE.Group();
-      g.add(
-        mesh(new THREE.CylinderGeometry(0.18, 0.28, 2.4, 6), trunk, 0, 1.2, 0),
+  /** Warm fairy light at a world position (drawn later as one twinkling point cloud). */
+  private fairy(v: THREE.Vector3, tint = 0) {
+    const c = new THREE.Color(
+      tint === 1 ? "#fff3d6" : tint === 2 ? "#ffc18a" : "#ffd98c",
+    );
+    this.fairyPos.push(v.x, v.y, v.z);
+    this.fairyCol.push(c.r, c.g, c.b);
+    this.fairySeed.push(Math.random() * 100);
+  }
+  /** A round, leafy garden tree. `lights` wraps the trunk and drapes the canopy with fairy-light wires. */
+  private lushTree(
+    x: number,
+    z: number,
+    s: number,
+    i: number,
+    lights: "full" | "light",
+    lanterns = 0,
+  ) {
+    const g = new THREE.Group();
+    const bark = std("#4a3730");
+    const leafColors = ["#3a6c52", "#467a58", "#355f4c", "#4f8460", "#3d6c5c"];
+    // Fully lit trees glow a little warm from the lights inside them.
+    const warm =
+      lights === "full"
+        ? { emissive: "#5a4a1c", emissiveIntensity: 0.32 }
+        : { emissive: "#1a2240", emissiveIntensity: 0.2 };
+    g.add(mesh(new THREE.CylinderGeometry(0.22, 0.4, 3.4, 8), bark, 0, 1.7, 0));
+    for (const [rx, rz, len] of [
+      [0.7, 0.3, 1.6],
+      [-0.6, -0.4, 1.4],
+    ]) {
+      const b = mesh(
+        new THREE.CylinderGeometry(0.07, 0.13, len, 6),
+        bark,
+        rx * 0.6,
+        2.9,
+        rz * 0.6,
       );
-      for (const [r, y] of [
-        [1.7, 2.8],
-        [1.35, 3.9],
-        [0.9, 4.8],
-      ])
-        g.add(
-          mesh(new THREE.IcosahedronGeometry(r, 0), leaves[i % 3], 0, y, 0),
-        );
-      g.position.set(x, 0, z);
-      g.scale.setScalar(s);
-      g.rotation.y = i;
-      this.scene.add(g);
-    };
-    let i = 0;
-    for (let x = -34; x <= 34; x += 6.5)
-      tree(x + (i % 2) * 2, -31 - (i % 3) * 3, 1.3 + (i % 3) * 0.3, i++);
-    for (let z = -24; z <= 26; z += 7) {
-      tree(-32 - (i % 2) * 2, z, 1.2 + (i % 3) * 0.25, i++);
-      tree(32 + (i % 2) * 2, z + 3, 1.2 + (i % 3) * 0.25, i++);
+      b.rotation.set(rz, 0, -rx);
+      g.add(b);
     }
-    for (let x = -28; x <= 28; x += 9) tree(x + 3, 31 + (i % 2) * 3, 1.1, i++);
+    const blobs: [number, number, number, number][] = [
+      [0, 4.4, 0, 2.1],
+      [1.35, 3.85, 0.35, 1.55],
+      [-1.25, 3.95, -0.3, 1.6],
+      [0.3, 5.4, -0.2, 1.35],
+      [-0.4, 3.75, 1.25, 1.35],
+      [0.55, 3.75, -1.3, 1.3],
+    ];
+    blobs.forEach(([bx, by, bz, r], k) => {
+      const leaf = mesh(
+        new THREE.IcosahedronGeometry(r, 1),
+        std(leafColors[(i + k) % leafColors.length], {
+          flatShading: true,
+          roughness: 0.95,
+          ...warm,
+        }),
+        bx,
+        by,
+        bz,
+      );
+      leaf.scale.y = 0.85;
+      g.add(leaf);
+    });
+    g.position.set(x, 0, z);
+    g.scale.setScalar(s);
+    g.rotation.y = i * 1.7;
+    this.scene.add(g);
+    g.updateMatrixWorld(true);
+    const v = new THREE.Vector3();
+    const put = (lx: number, ly: number, lz: number, tint = 0) =>
+      this.fairy(v.set(lx, ly, lz).applyMatrix4(g.matrixWorld), tint);
+    // Wire wound around the trunk.
+    const turns = lights === "full" ? 120 : 60;
+    for (let k = 0; k < turns; k++) {
+      const a = k * (lights === "full" ? 0.52 : 0.9),
+        y = 0.35 + (k / turns) * 2.9,
+        r = 0.42 - y * 0.06;
+      put(Math.cos(a) * r, y, Math.sin(a) * r, k % 9 === 0 ? 1 : 0);
+    }
+    // Wires draped over the canopy along random arcs.
+    const strands = lights === "full" ? 3 : 1;
+    blobs.forEach(([bx, by, bz, r], k) => {
+      if (lights === "light" && k > 2) return;
+      for (let n = 0; n < strands; n++) {
+        const axis = new THREE.Vector3(
+          Math.random() - 0.5,
+          Math.random() * 0.6,
+          Math.random() - 0.5,
+        ).normalize();
+        const start = new THREE.Vector3(1, 0, 0).cross(axis).normalize();
+        const steps = Math.round(r * 9);
+        for (let q = 0; q < steps; q++) {
+          const p = start
+            .clone()
+            .applyAxisAngle(axis, (q / steps) * Math.PI * 1.6);
+          if (p.y < -0.35) continue;
+          put(
+            bx + p.x * r * 1.04,
+            by + p.y * r * 0.88,
+            bz + p.z * r * 1.04,
+            q % 7 === 0 ? 1 : 0,
+          );
+        }
+      }
+    });
+    // Strands hanging down from the canopy edge, like a light curtain.
+    const drips = lights === "full" ? 9 : 3;
+    for (let d = 0; d < drips; d++) {
+      const a = (d / drips) * Math.PI * 2 + i,
+        r = 1.9 + (d % 3) * 0.3,
+        len = 1.2 + ((d * 7) % 5) * 0.25;
+      for (let y = 0; y < len; y += 0.17)
+        put(Math.cos(a) * r, 3.3 - y, Math.sin(a) * r, d % 4 === 0 ? 2 : 0);
+    }
+    // Paper lanterns hanging from the lower branches.
+    for (let n = 0; n < lanterns; n++) {
+      const a = (n / Math.max(1, lanterns)) * Math.PI * 2 + 0.6,
+        r = 1.5;
+      const top = new THREE.Vector3(
+        Math.cos(a) * r,
+        3.2,
+        Math.sin(a) * r,
+      ).applyMatrix4(g.matrixWorld);
+      const drop = 0.7 + (n % 2) * 0.5;
+      const bottom = top.clone().setY(top.y - drop);
+      this.scene.add(
+        new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([top, bottom]),
+          new THREE.LineBasicMaterial({ color: "#2a2230" }),
+        ),
+      );
+      const lan = new THREE.Group();
+      lan.add(
+        mesh(
+          new THREE.CylinderGeometry(0.24, 0.24, 0.5, 4),
+          std("#ffd38a", { emissive: "#ffb85c", emissiveIntensity: 1.5 }),
+          0,
+          0,
+          0,
+        ),
+      );
+      lan.add(
+        mesh(
+          new THREE.CylinderGeometry(0.29, 0.29, 0.06, 4),
+          std("#3a2b26"),
+          0,
+          0.28,
+          0,
+        ),
+      );
+      lan.add(
+        mesh(
+          new THREE.CylinderGeometry(0.29, 0.29, 0.06, 4),
+          std("#3a2b26"),
+          0,
+          -0.28,
+          0,
+        ),
+      );
+      const halo = glow("#ffc46b", 2.6, 0.9);
+      lan.add(halo);
+      lan.position.copy(bottom).setY(bottom.y - 0.2);
+      lan.rotation.y = Math.PI / 4;
+      this.scene.add(lan);
+    }
+  }
+  private buildTrees() {
+    let i = 0;
+    // Perimeter woods: lighter wiring so the edges glow without too many lights.
+    for (let x = -34; x <= 34; x += 6.5)
+      this.lushTree(
+        x + (i % 2) * 2,
+        -31 - (i % 3) * 3,
+        1.15 + (i % 3) * 0.2,
+        i++,
+        "light",
+      );
+    for (let z = -24; z <= 26; z += 7) {
+      this.lushTree(-32 - (i % 2) * 2, z, 1.05 + (i % 3) * 0.2, i++, "light");
+      this.lushTree(
+        32 + (i % 2) * 2,
+        z + 3,
+        1.05 + (i % 3) * 0.2,
+        i++,
+        "light",
+      );
+    }
+    for (let x = -28; x <= 28; x += 9)
+      this.lushTree(x + 3, 31 + (i % 2) * 3, 1, i++, "light");
+    // Feature trees inside the garden: fully wrapped in fairy lights with hanging lanterns.
+    GARDEN_TREES.forEach((t, k) =>
+      this.lushTree(t.x, t.z, t.s, 50 + k, "full", k % 3 === 2 ? 3 : 2),
+    );
+  }
+  /** Vine-covered arch with lights over the entrance path. */
+  private buildArch() {
+    const g = new THREE.Group();
+    g.position.set(ARCH.x, 0, ARCH.z);
+    const wood = std("#5a4034");
+    for (const sx of [-1, 1])
+      g.add(
+        mesh(
+          new THREE.CylinderGeometry(0.13, 0.16, 3.3, 8),
+          wood,
+          sx * ARCH.half,
+          1.65,
+          0,
+        ),
+      );
+    const arc = mesh(
+      new THREE.TorusGeometry(ARCH.half, 0.12, 8, 32, Math.PI),
+      wood,
+      0,
+      3.3,
+      0,
+    );
+    g.add(arc);
+    const leaf = std("#4a8059", {
+      flatShading: true,
+      emissive: "#3a3416",
+      emissiveIntensity: 0.3,
+    });
+    const blossom = ["#f3a6c8", "#f7f0ff", "#c99cf2", "#e7678f"].map((c) =>
+      std(c, { emissive: c, emissiveIntensity: 0.12 }),
+    );
+    for (let k = 0; k <= 26; k++) {
+      const a = (k / 26) * Math.PI;
+      const x = Math.cos(a) * ARCH.half,
+        y = 3.3 + Math.sin(a) * ARCH.half;
+      const l = mesh(
+        new THREE.IcosahedronGeometry(0.24 + (k % 3) * 0.06, 1),
+        leaf,
+        x,
+        y,
+        (k % 2) * 0.12 - 0.06,
+      );
+      g.add(l);
+      if (k % 2 === 0)
+        g.add(
+          mesh(
+            new THREE.IcosahedronGeometry(0.1, 0),
+            blossom[k % 4],
+            x + 0.12,
+            y - 0.18,
+            0.22,
+          ),
+        );
+    }
+    for (const sx of [-1, 1])
+      for (let y = 0.4; y < 3.3; y += 0.45) {
+        g.add(
+          mesh(
+            new THREE.IcosahedronGeometry(0.2, 1),
+            leaf,
+            sx * ARCH.half + 0.1,
+            y,
+            0.1 * sx,
+          ),
+        );
+        g.add(
+          mesh(
+            new THREE.IcosahedronGeometry(0.09, 0),
+            blossom[Math.round(y * 3) % 4],
+            sx * ARCH.half - 0.12,
+            y + 0.15,
+            0.2,
+          ),
+        );
+      }
+    this.scene.add(g);
+    g.updateMatrixWorld(true);
+    const v = new THREE.Vector3();
+    for (let k = 0; k <= 160; k++) {
+      const a = (k / 160) * Math.PI;
+      const r = ARCH.half + 0.2 + Math.sin(k * 1.7) * 0.1;
+      this.fairy(
+        v
+          .set(Math.cos(a) * r, 3.3 + Math.sin(a) * r, Math.sin(k * 2.3) * 0.25)
+          .applyMatrix4(g.matrixWorld),
+        k % 6 === 0 ? 1 : 0,
+      );
+    }
+    for (const sx of [-1, 1])
+      for (let k = 0; k < 40; k++) {
+        const a = k * 0.8;
+        this.fairy(
+          v
+            .set(
+              sx * ARCH.half + Math.cos(a) * 0.3,
+              0.3 + k * 0.075,
+              Math.sin(a) * 0.3,
+            )
+            .applyMatrix4(g.matrixWorld),
+        );
+      }
+  }
+  /** Scalloped fairy lights along the lantern shop's eaves, like the gazebo in the reference. */
+  private buildShopLights() {
+    const v = new THREE.Vector3();
+    const front = SHOP.z + SHOP.hd + 0.9,
+      left = SHOP.x - SHOP.hw - 0.6,
+      right = SHOP.x + SHOP.hw + 0.6;
+    const span = 1.8;
+    for (let x = left; x <= right; x += 0.12) {
+      const f = ((x - left) % span) / span;
+      this.fairy(
+        v.set(x, 3.45 - Math.sin(f * Math.PI) * 0.35, front),
+        Math.round(x * 10) % 8 === 0 ? 1 : 0,
+      );
+    }
+    for (const sx of [left, right])
+      for (let z = SHOP.z - SHOP.hd - 0.6; z <= front; z += 0.14) {
+        const f = ((z - (SHOP.z - SHOP.hd)) % span) / span;
+        this.fairy(v.set(sx, 3.45 - Math.sin(f * Math.PI) * 0.3, z));
+      }
+    // Vines trailing over the roof edge.
+    const leaf = std("#4d8458", {
+      flatShading: true,
+      emissive: "#3a3416",
+      emissiveIntensity: 0.3,
+    });
+    for (let x = left; x <= right; x += 0.6) {
+      this.scene.add(
+        mesh(
+          new THREE.IcosahedronGeometry(0.2 + Math.abs((x * 7) % 3) * 0.04, 1),
+          leaf,
+          x,
+          3.72,
+          front - 0.3,
+        ),
+      );
+      if (Math.round(x * 3) % 3 === 0)
+        this.scene.add(
+          mesh(
+            new THREE.IcosahedronGeometry(0.13, 1),
+            leaf,
+            x + 0.1,
+            3.35,
+            front - 0.2,
+          ),
+        );
+    }
+  }
+  /** Stepping stones and drifting petals on the pond. */
+  private buildPondDecor() {
+    const stone = std("#857c78", { roughness: 0.9 });
+    for (const [x, z, r] of [
+      [20.5, 9, 0.55],
+      [19.3, 10.5, 0.6],
+      [18.5, 12.1, 0.5],
+      [18.9, 13.8, 0.58],
+      [20.1, 15.1, 0.52],
+    ]) {
+      const st = mesh(
+        new THREE.CylinderGeometry(r, r * 1.12, 0.22, 12),
+        stone,
+        x,
+        0.07,
+        z,
+      );
+      st.scale.z = 0.85;
+      st.rotation.y = x;
+      this.scene.add(st);
+    }
+    const petalGeo = new THREE.CircleGeometry(0.075, 6);
+    petalGeo.rotateX(-Math.PI / 2);
+    const petals = new THREE.InstancedMesh(
+      petalGeo,
+      new THREE.MeshLambertMaterial({ emissive: "#3a1a2c" }),
+      520,
+    );
+    const m = new THREE.Matrix4(),
+      c = new THREE.Color();
+    const pinks = ["#f29bc4", "#ef7fae", "#f7c6dc", "#e86f9a"];
+    for (let k = 0; k < 520; k++) {
+      const a = Math.random() * Math.PI * 2,
+        r = Math.sqrt(Math.random()) * 0.94;
+      m.compose(
+        new THREE.Vector3(
+          POND.x + Math.cos(a) * POND.rx * r,
+          0.055,
+          POND.z + Math.sin(a) * POND.rz * r,
+        ),
+        new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(0, Math.random() * 3, 0),
+        ),
+        new THREE.Vector3(1, 1, 0.6 + Math.random() * 0.6),
+      );
+      petals.setMatrixAt(k, m);
+      petals.setColorAt(k, c.set(pinks[k % 4]));
+    }
+    this.scene.add(petals);
+    // Warm reflections of the nearby tree lights on the water.
+    for (const [x, z] of [
+      [21.2, 16.6],
+      [9, 7.6],
+    ]) {
+      const r = mesh(
+        new THREE.CircleGeometry(1, 24),
+        new THREE.MeshBasicMaterial({
+          map: glowTexture(),
+          color: "#ffc77a",
+          transparent: true,
+          opacity: 0.35,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+        x,
+        0.07,
+        z,
+      );
+      r.rotation.x = -Math.PI / 2;
+      r.scale.set(0.9, 2.6, 1);
+      this.scene.add(r);
+    }
+  }
+  /** Flower beds: bushes topped with purple, pink, red, blue and white blooms. */
+  private buildFlowers() {
+    const path: Position[] = [];
+    for (let k = 0; k <= 60; k++) {
+      const t = k / 60,
+        u = 1 - t;
+      path.push({
+        x: u ** 3 * 2 + 3 * u * u * t * -4 + 3 * u * t * t * 5 + t ** 3 * 0,
+        z: u ** 3 * 30 + 3 * u * u * t * 18 + 3 * u * t * t * 6 + t ** 3 * -6,
+      });
+    }
+    const nearPath = (x: number, z: number) =>
+      path.some((p) => Math.hypot(p.x - x, p.z - z) < 2.3);
+    const blocked = (x: number, z: number) =>
+      nearPath(x, z) ||
+      Object.values(SPOTS).some((sp) => Math.hypot(sp.x - x, sp.z - z) < 2.6) ||
+      ((x - POND.x) / (POND.rx + 0.6)) ** 2 +
+        ((z - POND.z) / (POND.rz + 0.6)) ** 2 <
+        1 ||
+      (Math.abs(x - SHOP.x) < SHOP.hw + 1.4 &&
+        Math.abs(z - SHOP.z) < SHOP.hd + 1.4) ||
+      Math.hypot(x - TABLE.x, z - TABLE.z) < TABLE.r + 3 ||
+      Math.hypot(x - PAGODA.x, z - PAGODA.z) < PAGODA.r + 0.6;
+    const centres: [number, number, number][] = [];
+    const add = (x: number, z: number, hue: number) => {
+      if (!blocked(x, z)) centres.push([x, z, hue]);
+    };
+    // Around the pond bank.
+    for (let a = 0; a < Math.PI * 2; a += 0.32)
+      add(
+        POND.x + Math.cos(a) * (POND.rx + 1.4),
+        POND.z + Math.sin(a) * (POND.rz + 1.4),
+        Math.floor(a * 3),
+      );
+    // Around the pagoda terrace, leaving the front open.
+    for (let a = 0; a < Math.PI * 2; a += 0.3)
+      if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a)) - Math.PI / 2) > 0.55)
+        add(
+          PAGODA.x + Math.cos(a) * 9.6,
+          PAGODA.z + Math.sin(a) * 9.6,
+          Math.floor(a * 5),
+        );
+    // Along both sides of the path.
+    path.forEach((p, k) => {
+      if (k % 3) return;
+      add(p.x - 3.1, p.z, k);
+      add(p.x + 3.1, p.z, k + 3);
+    });
+    // At the feet of the lit trees and the arch.
+    GARDEN_TREES.forEach((t, k) => {
+      for (let a = 0; a < Math.PI * 2; a += 1.1)
+        add(t.x + Math.cos(a) * 2, t.z + Math.sin(a) * 2, k + Math.round(a));
+    });
+    for (const sx of [-1, 1])
+      add(ARCH.x + sx * (ARCH.half + 1.1), ARCH.z, 2 + sx);
+    // Garden edges.
+    for (let x = -26; x <= 26; x += 2.6) {
+      add(x, -26.5, Math.round(x));
+      add(x, 24.6, Math.round(x) + 2);
+    }
+    for (let z = -24; z <= 22; z += 2.6) {
+      add(-26.6, z, Math.round(z));
+      add(26.6, z, Math.round(z) + 1);
+    }
+    const palettes = [
+      ["#8e6bd8", "#b9a2ff", "#f4eefc"],
+      ["#f18ac0", "#ffc2dd", "#f4eefc"],
+      ["#d14ba0", "#f18ac0", "#b9a2ff"],
+      ["#e5486a", "#f59ab0", "#ffe3ea"],
+      ["#6aa0ff", "#a8c6ff", "#f4eefc"],
+      ["#c77dff", "#8e6bd8", "#f18ac0"],
+    ];
+    const per = 22;
+    const flowers = new THREE.InstancedMesh(
+      new THREE.IcosahedronGeometry(0.065, 0),
+      new THREE.MeshLambertMaterial({ emissive: "#2c1a3c" }),
+      centres.length * per,
+    );
+    const bushes = new THREE.InstancedMesh(
+      new THREE.IcosahedronGeometry(0.5, 1),
+      std("#3b6c4e", {
+        flatShading: true,
+        emissive: "#14243a",
+        emissiveIntensity: 0.25,
+      }),
+      centres.length,
+    );
+    const m = new THREE.Matrix4(),
+      c = new THREE.Color(),
+      q = new THREE.Quaternion();
+    let n = 0;
+    centres.forEach(([x, z, hue], k) => {
+      const bs = 0.6 + ((k * 13) % 7) * 0.07;
+      m.compose(
+        new THREE.Vector3(x, 0.18 * bs, z),
+        q,
+        new THREE.Vector3(bs * 1.25, bs * 0.6, bs * 1.15),
+      );
+      bushes.setMatrixAt(k, m);
+      const pal = palettes[Math.abs(hue) % palettes.length];
+      for (let f = 0; f < per; f++) {
+        const a = Math.random() * Math.PI * 2,
+          r = Math.sqrt(Math.random()) * 0.75 * bs;
+        const sc = 0.7 + Math.random() * 0.7;
+        m.compose(
+          new THREE.Vector3(
+            x + Math.cos(a) * r,
+            0.24 * bs + Math.random() * 0.3,
+            z + Math.sin(a) * r * 0.9,
+          ),
+          q,
+          new THREE.Vector3(sc, sc, sc),
+        );
+        flowers.setMatrixAt(n, m);
+        flowers.setColorAt(n++, c.set(pal[f % 3 === 0 ? 2 : f % 2]));
+      }
+    });
+    flowers.count = n;
+    this.scene.add(bushes, flowers);
+  }
+  /** Fireflies drifting low over the garden. */
+  private buildFireflies() {
+    const n = 170,
+      pos = new Float32Array(n * 3),
+      seed = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      pos.set(
+        [
+          (Math.random() - 0.5) * 54,
+          0.4 + Math.random() * 2.6,
+          -26 + Math.random() * 50,
+        ],
+        i * 3,
+      );
+      seed[i] = Math.random() * 100;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("seed", new THREE.BufferAttribute(seed, 1));
+    this.fireflyMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { time: { value: 0 }, px: { value: 400 } },
+      vertexShader:
+        "attribute float seed; uniform float time; uniform float px; varying float a; void main(){ vec3 p = position + vec3(sin(time*0.31+seed*7.0)*1.4, sin(time*0.53+seed*3.0)*0.45, cos(time*0.27+seed*5.0)*1.4); a = smoothstep(0.1, 1.0, sin(time*(0.9+fract(seed*3.1)*1.3)+seed*9.0)); vec4 mv = modelViewMatrix*vec4(p,1.0); gl_PointSize = 0.22*px/max(-mv.z,0.5); gl_Position = projectionMatrix*mv; }",
+      fragmentShader:
+        "varying float a; void main(){ float d = length(gl_PointCoord-0.5); float core = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vec3(0.88,1.0,0.55)*1.4, a*core*core); }",
+    });
+    const pts = new THREE.Points(g, this.fireflyMat);
+    pts.frustumCulled = false;
+    this.scene.add(pts);
+  }
+  /** Draw every fairy light gathered above as a single twinkling point cloud. */
+  private buildFairyLights() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(this.fairyPos), 3),
+    );
+    g.setAttribute(
+      "color",
+      new THREE.BufferAttribute(new Float32Array(this.fairyCol), 3),
+    );
+    g.setAttribute(
+      "seed",
+      new THREE.BufferAttribute(new Float32Array(this.fairySeed), 1),
+    );
+    this.fairyMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { time: { value: 0 }, px: { value: 400 } },
+      vertexShader:
+        "attribute float seed; attribute vec3 color; uniform float time; uniform float px; varying vec3 vc; varying float a; void main(){ vc = color; a = 0.7 + 0.3*sin(time*(0.8+fract(seed)*2.2)+seed*12.0); vec4 mv = modelViewMatrix*vec4(position,1.0); gl_PointSize = clamp(0.34*px/max(-mv.z,0.5), 1.5, 40.0); gl_Position = projectionMatrix*mv; }",
+      fragmentShader:
+        "varying vec3 vc; varying float a; void main(){ float d = length(gl_PointCoord-0.5); float core = smoothstep(0.18, 0.0, d); float halo = smoothstep(0.5, 0.0, d)*0.45; gl_FragColor = vec4(vc*1.3 + core*0.4, a*(core + halo)); }",
+    });
+    const pts = new THREE.Points(g, this.fairyMat);
+    pts.frustumCulled = false;
+    this.scene.add(pts);
   }
   private buildSpots() {
     for (const [id, p] of Object.entries(SPOTS)) {
@@ -2083,8 +2685,8 @@ export class FestivalWorld {
     const routes: Position[][] = [
       [
         { x: 2, z: 4 },
-        { x: 4, z: 6 },
-        { x: 4, z: 22 },
+        { x: 5.2, z: 6 },
+        { x: 5.2, z: 21 },
         { x: -3, z: 22 },
       ],
       [
@@ -2218,6 +2820,12 @@ export class FestivalWorld {
     this.camera.aspect = w / h;
     this.camera.fov = w / h < 1.2 ? 62 : 50;
     this.camera.updateProjectionMatrix();
+    // Point sizes are given in world units; convert with the current viewport height.
+    const px =
+      (h * this.renderer.getPixelRatio()) /
+      (2 * Math.tan((this.camera.fov * Math.PI) / 360));
+    if (this.fairyMat) this.fairyMat.uniforms.px.value = px;
+    if (this.fireflyMat) this.fireflyMat.uniforms.px.value = px;
   }
   private desiredCamera(out: THREE.Vector3, target: THREE.Vector3) {
     const yaw = this.heading + this.orbitYaw;
@@ -2557,6 +3165,8 @@ export class FestivalWorld {
   }
   private updateAmbient(dt: number, t: number) {
     this.starMat.uniforms.time.value = this.calm ? 0 : t;
+    this.fairyMat.uniforms.time.value = this.calm ? 0 : t;
+    this.fireflyMat.uniforms.time.value = this.calm ? 2 : t;
     if (!this.calm)
       for (const c of this.clouds) {
         c.position.x += dt * 1.2;
@@ -2654,7 +3264,11 @@ export class FestivalWorld {
         let px = ((x + 1) / 2) * w,
           py = ((1 - y) / 2) * h;
         const sideEdge = Math.abs(x) >= mx * 0.99;
-        for (let n = 0; n < 6 && placed.some(([a, c]) => Math.hypot(a - px, c - py) < 46); n++) {
+        for (
+          let n = 0;
+          n < 6 && placed.some(([a, c]) => Math.hypot(a - px, c - py) < 46);
+          n++
+        ) {
           if (sideEdge) py += py > h / 2 ? -46 : 46;
           else px += px > w / 2 ? -56 : 56;
         }

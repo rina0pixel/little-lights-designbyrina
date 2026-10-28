@@ -18,6 +18,23 @@ export const POSTS: Position[] = [
   { x: 6.5, z: -4 },
   { x: 24, z: -1 },
 ];
+// Large lit garden trees inside the walkable area (trunk collision only).
+export const GARDEN_TREES: (Position & { s: number })[] = [
+  { x: -25.5, z: 5, s: 1.15 },
+  { x: -15, z: 23.5, s: 1 },
+  { x: 24, z: 22, s: 1.1 },
+  { x: 25, z: 3, s: 1.2 },
+  { x: -7, z: -24, s: 1.25 },
+  { x: 9, z: -24, s: 1.2 },
+  { x: -25.5, z: -20, s: 1.3 },
+  { x: 25.5, z: -20, s: 1.3 },
+];
+// Vine-and-light arch over the path, framing the pagoda.
+export const ARCH = { x: 1, z: 9.5, half: 2.6 };
+export const ARCH_POSTS: Position[] = [
+  { x: ARCH.x - ARCH.half, z: ARCH.z },
+  { x: ARCH.x + ARCH.half, z: ARCH.z },
+];
 export const FRIENDS = {
   one: { x: -20.5, z: 12.2, heading: Math.PI / 2 },
   two: { x: -14.6, z: 9.2, heading: Math.PI * 0.2 },
@@ -174,6 +191,10 @@ export function isWalkable(p: Position): boolean {
     return false;
   if (distance(p, TABLE) < TABLE.r + BODY) return false;
   for (const post of POSTS) if (distance(p, post) < 0.35 + BODY) return false;
+  for (const tree of GARDEN_TREES)
+    if (distance(p, tree) < 0.45 * tree.s + BODY) return false;
+  for (const post of ARCH_POSTS)
+    if (distance(p, post) < 0.2 + BODY) return false;
   for (const f of Object.values(FRIENDS))
     if (distance(p, f) < 0.4 + BODY) return false;
   const ex = (p.x - POND.x) / (POND.rx + BODY),
