@@ -350,7 +350,7 @@ export default function Home() {
     [error, E] = useState(""),
     [toast, T] = useState(""),
     [pose, Po] = useState(""),
-    [sound, So] = useState(false),
+    [sound, So] = useState(true),
     [help, H] = useState(false);
   const [ready, SetReady] = useState(false),
     [noWebGL, SetNoWebGL] = useState(false),
@@ -380,6 +380,25 @@ export default function Home() {
       ambience.current.start();
     } else ambience.current?.stop();
   }
+  // Sound is on by default. Browsers only allow audio after the visitor interacts, so the
+  // garden ambience starts on their first tap, click or key press (usually "Enter the garden").
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
+  useEffect(() => {
+    const first = () => {
+      off();
+      if (!soundRef.current) return;
+      ambience.current ??= new Ambience();
+      ambience.current.start();
+    };
+    const off = () => {
+      window.removeEventListener("pointerdown", first, true);
+      window.removeEventListener("keydown", first, true);
+    };
+    window.addEventListener("pointerdown", first, true);
+    window.addEventListener("keydown", first, true);
+    return off;
+  }, []);
   useEffect(() => {
     const onVis = () => ambience.current?.setVisible(!document.hidden);
     document.addEventListener("visibilitychange", onVis);
