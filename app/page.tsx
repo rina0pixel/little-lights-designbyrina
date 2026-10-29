@@ -435,7 +435,7 @@ export default function Home() {
     H(false);
     SetFirework(fireworkChoice);
     world.current?.launchFireworks(fireworkChoice);
-    chime();
+    if (sound) ambience.current?.fireworks();
   }
   async function refresh() {
     try {

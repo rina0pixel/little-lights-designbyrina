@@ -1,5 +1,7 @@
 // Night-garden ambience, generated live with the Web Audio API (no audio files, no licences).
 // Rina's chosen mix: crickets 35%, night breeze 25%, wind chimes 15%, saung-style harp 10%, pagoda bells 60%.
+// Fireworks use Rina's choice "Music box sky": no bangs, each burst opens as a pentatonic chime
+// with a sprinkle of tiny sparkles, timed to the bursts at 0.6 / 1.6 / 2.6 s (volume 70%).
 // The same engine powers the "Little Lights Night Sounds" picker page, so the game sounds like the preview.
 
 type LayerId = "crickets" | "breeze" | "chimes" | "harp" | "bells";
@@ -23,6 +25,9 @@ const REVERB_SEND: Record<LayerId, number> = {
   bells: 0.5,
 };
 const MASTER = 0.6;
+const FIREWORKS_VOLUME = 0.7;
+const BURSTS = [0.6, 1.6, 2.6]; // seconds after launch, matching world.ts launchFireworks
+const DUCK = 0.45; // garden sounds soften to 45% during the show
 
 const PENTA = [261.63, 293.66, 329.63, 392.0, 440.0]; // Myanmar-style pentatonic: C D E G A
 const note = (i: number) =>
@@ -37,6 +42,90 @@ export class Ambience {
   private ticker: ReturnType<typeof setInterval> | null = null;
   private plucks = new Map<number, AudioBuffer>();
   private on = false;
+  private reverb!: ConvolverNode;
+  private fwBus: GainNode | null = null;
+  private duckTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Play the fireworks sound for one six-second show. Only call while sound is on. */
+  fireworks() {
+    const ctx = this.ctx;
+    if (!ctx || !this.on || ctx.state !== "running") return;
+    if (!this.fwBus) {
+      this.fwBus = ctx.createGain();
+      this.fwBus.gain.value = FIREWORKS_VOLUME;
+      this.fwBus.connect(this.master);
+      const send = ctx.createGain();
+      send.gain.value = 0.9;
+      this.fwBus.connect(send).connect(this.reverb);
+    }
+    const now = ctx.currentTime + 0.05;
+    BURSTS.forEach((b, i) => {
+      const t = now + b;
+      this.sparkles(t - 0.4, 0.4, 6, 3000, 5000, 0.012);
+      this.chimeBurst(t, [9, 10, 8][i]);
+      this.sparkles(t + 0.2, 2, 14, 3500, 6500, 0.012);
+    });
+    this.duck(DUCK, 0.6);
+    if (this.duckTimer) clearTimeout(this.duckTimer);
+    this.duckTimer = setTimeout(() => this.duck(1, 1.8), 5200);
+  }
+  private duck(level: number, seconds: number) {
+    const ctx = this.ctx!,
+      t = ctx.currentTime;
+    for (const [id, l] of this.layers) {
+      const g = l.out.gain;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(g.value, t);
+      g.linearRampToValueAtTime(
+        (AMBIENCE_MIX[id] / 100) * 1.4 * level,
+        t + seconds,
+      );
+    }
+  }
+  private sparkles(
+    t: number,
+    dur: number,
+    count: number,
+    lo: number,
+    hi: number,
+    amp: number,
+  ) {
+    const ctx = this.ctx!;
+    for (let i = 0; i < count; i++) {
+      const at = t + Math.pow(Math.random(), 1.4) * dur,
+        o = ctx.createOscillator(),
+        g = ctx.createGain();
+      o.frequency.value = rnd(lo, hi);
+      o.connect(g);
+      this.env(g.gain, at, amp * rnd(0.4, 1), 0.003, rnd(0.06, 0.18));
+      this.pan(g, rnd(-0.9, 0.9)).connect(this.fwBus!);
+      o.start(at);
+      o.stop(at + 0.25);
+    }
+  }
+  /** A rising pentatonic music-box chime: one burst of fireworks. */
+  private chimeBurst(t: number, root: number) {
+    const ctx = this.ctx!,
+      steps = [0, 2, 4, 5, 7, 9].slice(0, 4 + Math.floor(Math.random() * 3));
+    steps.forEach((s, k) => {
+      const at = t + k * 0.09,
+        f = note(root + s);
+      for (const [mul, amp] of [
+        [1, 0.06],
+        [2.76, 0.016],
+        [5.4, 0.006],
+      ]) {
+        const o = ctx.createOscillator(),
+          g = ctx.createGain();
+        o.frequency.value = f * mul;
+        o.connect(g);
+        this.env(g.gain, at, amp, 0.004, 2.4 / mul + 0.8);
+        this.pan(g, (k / steps.length) * 1.4 - 0.7).connect(this.fwBus!);
+        o.start(at);
+        o.stop(at + 3.5);
+      }
+    });
+  }
 
   /** Start (or resume) the ambience. Call from a click so browsers allow audio. */
   async start() {
@@ -92,7 +181,7 @@ export class Ambience {
     comp.threshold.value = -18;
     comp.ratio.value = 3;
     this.master.connect(comp).connect(ctx.destination);
-    const reverb = ctx.createConvolver();
+    const reverb = (this.reverb = ctx.createConvolver());
     reverb.buffer = this.impulse(3, 2.4);
     const wet = ctx.createGain();
     wet.gain.value = 0.6;
