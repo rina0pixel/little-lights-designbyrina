@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { isNearTable, isNearSpot, START, type Position } from "./movement";
 import { FestivalWorld } from "./world";
+import { Ambience } from "./ambience";
 import { moderate } from "./api/wishes/moderation";
 import {
   Flame,
@@ -369,6 +370,24 @@ export default function Home() {
     world = useRef<FestivalWorld | null>(null),
     wishesRef = useRef<Wish[]>([]);
   wishesRef.current = wishes;
+  const ambience = useRef<Ambience | null>(null);
+  // Night-garden ambience: plays only while sound is on; pauses when the tab is hidden.
+  function toggleSound() {
+    const next = !sound;
+    So(next);
+    if (next) {
+      ambience.current ??= new Ambience();
+      ambience.current.start();
+    } else ambience.current?.stop();
+  }
+  useEffect(() => {
+    const onVis = () => ambience.current?.setVisible(!document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      ambience.current?.dispose();
+    };
+  }, []);
   const keys = useRef(new Set<string>()),
     audio = useRef<AudioContext | null>(null);
   const mm = lang === "mm",
@@ -808,7 +827,12 @@ export default function Home() {
           </button>
           <button
             aria-label={sound ? "Mute sounds" : "Enable sounds"}
-            onClick={() => So(!sound)}
+            onClick={toggleSound}
+            title={
+              sound
+                ? t("Sound on", "အသံဖွင့်ထားသည်")
+                : t("Turn on night garden sounds", "ညဥယျာဉ်အသံ ဖွင့်မယ်")
+            }
           >
             {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
           </button>
