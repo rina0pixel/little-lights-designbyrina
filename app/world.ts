@@ -180,9 +180,10 @@ function cloudTexture(variant: number) {
     )[variant];
     for (const [x, y, r] of puffs) {
       const body = g.createRadialGradient(x, y - r * 0.35, r * 0.1, x, y, r);
-      body.addColorStop(0, "rgba(206,204,240,0.95)");
-      body.addColorStop(0.55, "rgba(150,150,205,0.75)");
-      body.addColorStop(1, "rgba(120,120,185,0)");
+      // Muted dusky violet, close to the night sky, with only a faint moonlit top.
+      body.addColorStop(0, "rgba(128,128,182,0.85)");
+      body.addColorStop(0.55, "rgba(96,98,156,0.6)");
+      body.addColorStop(1, "rgba(78,80,138,0)");
       g.fillStyle = body;
       g.beginPath();
       g.arc(x, y, r, 0, Math.PI * 2);
@@ -2039,13 +2040,14 @@ export class FestivalWorld {
     }
     // Small soft clouds, lit by the moon on top, drifting slowly around the whole sky.
     const looks = [0, 1, 2].map((v) => cloudTexture(v));
-    for (let i = 0; i < 16; i++) {
+    const PUFFS = 7;
+    for (let i = 0; i < PUFFS; i++) {
       const tex = looks[i % 3],
         w = 10 + ((i * 37) % 5),
         mat = new THREE.SpriteMaterial({
           map: tex,
           transparent: true,
-          opacity: 0.55 + ((i * 13) % 4) * 0.07,
+          opacity: 0.3 + ((i * 13) % 3) * 0.05,
           depthWrite: false,
           fog: false,
         });
@@ -2054,7 +2056,7 @@ export class FestivalWorld {
       sp.renderOrder = -1;
       const puff = {
         s: sp,
-        a: (i / 16) * Math.PI * 2 + (i % 2) * 0.2,
+        a: (i / PUFFS) * Math.PI * 2 + (i % 2) * 0.3,
         r: 48 + ((i * 7) % 4) * 5,
         y: 17 + ((i * 5) % 5) * 1.6,
         speed: 0.0045 + ((i * 3) % 4) * 0.0012,
