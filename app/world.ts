@@ -52,6 +52,36 @@ type Events = {
   onChildNear?: (index: number | null) => void;
 };
 
+const MOON_DIR = new THREE.Vector3(34, 30, -120);
+/** Where the sun sits for day mode: high in the south-west, so shadows fall across the garden. */
+const SUN_DIR = new THREE.Vector3(-0.45, 0.78, 0.43).normalize();
+/** The two looks; every value blends between them as dayT goes 0 → 1. */
+const NIGHT = {
+  top: new THREE.Color("#10143a"),
+  bottom: new THREE.Color("#4b4d86"),
+  fog: new THREE.Color("#2a2d5c"),
+  hemiSky: new THREE.Color("#9ea2e6"),
+  hemiGround: new THREE.Color("#2b4a3c"),
+  key: new THREE.Color("#c9cfff"),
+  cloud: new THREE.Color("#8082b8"),
+  bigCloud: new THREE.Color("#3b3e70"),
+  mist: new THREE.Color("#8d90cf"),
+  water: new THREE.Color("#27466f"),
+  waterGlow: new THREE.Color("#111c3c"),
+};
+const DAY = {
+  top: new THREE.Color("#3f86d6"),
+  bottom: new THREE.Color("#cfe5f4"),
+  fog: new THREE.Color("#c3daec"),
+  hemiSky: new THREE.Color("#d8ecff"),
+  hemiGround: new THREE.Color("#7d8f5c"),
+  key: new THREE.Color("#fff1d6"),
+  cloud: new THREE.Color("#ffffff"),
+  bigCloud: new THREE.Color("#f4f6fb"),
+  mist: new THREE.Color("#e8f1f8"),
+  water: new THREE.Color("#4f9ccc"),
+  waterGlow: new THREE.Color("#2f78a8"),
+};
 export const AVATAR_COLORS = ["#e78899", "#5b9f93", "#e8ac55", "#9c8ac7"];
 export const FIREWORK_COLORS = [
   "#ffd66b",
@@ -181,9 +211,10 @@ function cloudTexture(variant: number) {
     for (const [x, y, r] of puffs) {
       const body = g.createRadialGradient(x, y - r * 0.35, r * 0.1, x, y, r);
       // Muted dusky violet, close to the night sky, with only a faint moonlit top.
-      body.addColorStop(0, "rgba(128,128,182,0.85)");
-      body.addColorStop(0.55, "rgba(96,98,156,0.6)");
-      body.addColorStop(1, "rgba(78,80,138,0)");
+      // Neutral texture; the sprite colour tints it dusky violet at night, white by day.
+      body.addColorStop(0, "rgba(255,255,255,0.85)");
+      body.addColorStop(0.55, "rgba(205,208,222,0.6)");
+      body.addColorStop(1, "rgba(175,178,196,0)");
       g.fillStyle = body;
       g.beginPath();
       g.arc(x, y, r, 0, Math.PI * 2);
@@ -1133,6 +1164,20 @@ export class FestivalWorld {
   } | null = null;
   private spotRings: Record<string, THREE.Mesh> = {};
   private clouds: THREE.Group[] = [];
+  /* Day / night: everything that changes between the two looks. dayT eases 0 (night) → 1 (day). */
+  private dayT = 0;
+  private dayTarget = 0;
+  private skyMat!: THREE.ShaderMaterial;
+  private moon!: THREE.Sprite;
+  private moonHalo!: THREE.Sprite;
+  private sun!: THREE.Sprite;
+  private sunHalo!: THREE.Sprite;
+  private hemi!: THREE.HemisphereLight;
+  private keyLight!: THREE.DirectionalLight;
+  private mists: THREE.Sprite[] = [];
+  private bigCloudMat!: THREE.MeshLambertMaterial;
+  private shadowsReady = false;
+  private moonPath: THREE.Mesh | null = null;
   /** Small, soft moonlit clouds that drift slowly around the sky. */
   private puffs: {
     s: THREE.Sprite;
@@ -1141,6 +1186,7 @@ export class FestivalWorld {
     y: number;
     speed: number;
     bob: number;
+    baseOpacity?: number;
   }[] = [];
   // Fairy lights (tree wires, arch, shop eaves) are gathered while building, then drawn as one point cloud.
   private fairyPos: number[] = [];
@@ -1291,12 +1337,108 @@ export class FestivalWorld {
       (m.material as THREE.MeshStandardMaterial).emissiveIntensity = v
         ? 0.85
         : 0.12;
-    (this.lanternGlow.material as THREE.PointsMaterial).opacity = v ? 0.6 : 0;
+    (this.lanternGlow.material as THREE.PointsMaterial).opacity = v
+      ? 0.6 * (1 - 0.8 * this.dayT)
+      : 0;
     for (const m of this.shopLanterns)
       (m.material as THREE.MeshStandardMaterial).emissiveIntensity = v
         ? 0.9
         : 0.12;
-    for (const l of this.warmLights) l.intensity = v ? 60 : 0;
+    for (const l of this.warmLights) l.intensity = v ? 60 * this.warmScale : 0;
+  }
+  /** Warm lamp brightness: full at night, much softer in daylight. */
+  private get warmScale() {
+    return 1 - 0.75 * this.dayT;
+  }
+  /** Switch between the night festival and a sunny day. Blends over about 1.5 s. */
+  setDayMode(day: boolean) {
+    this.dayTarget = day ? 1 : 0;
+    if (this.calm) this.applyDayNight(this.dayTarget);
+  }
+  get isDay() {
+    return this.dayTarget === 1;
+  }
+  private applyDayNight(d: number) {
+    this.dayT = d;
+    const mix = (a: THREE.Color, b: THREE.Color, out: THREE.Color) =>
+      out.copy(a).lerp(b, d);
+    const u = this.skyMat.uniforms;
+    mix(NIGHT.top, DAY.top, u.top.value);
+    mix(NIGHT.bottom, DAY.bottom, u.bottom.value);
+    const fog = this.scene.fog as THREE.Fog;
+    mix(NIGHT.fog, DAY.fog, fog.color);
+    fog.near = 38 + 30 * d;
+    fog.far = 115 + 75 * d;
+    this.starMat.uniforms.fade.value = Math.max(0, 1 - d * 1.6);
+    (this.moon.material as THREE.SpriteMaterial).opacity = 1 - d;
+    (this.moonHalo.material as THREE.SpriteMaterial).opacity = 0.35 * (1 - d);
+    (this.sun.material as THREE.SpriteMaterial).opacity = d;
+    (this.sunHalo.material as THREE.SpriteMaterial).opacity = 0.45 * d;
+    // Moonlight turns into warm sunlight from high above; the sky light brightens.
+    mix(NIGHT.hemiSky, DAY.hemiSky, this.hemi.color);
+    mix(NIGHT.hemiGround, DAY.hemiGround, this.hemi.groundColor);
+    this.hemi.intensity = 1.9 - 0.5 * d;
+    mix(NIGHT.key, DAY.key, this.keyLight.color);
+    this.keyLight.intensity = 1.2 + 2.1 * d;
+    this.keyLight.position
+      .copy(MOON_DIR)
+      .lerp(SUN_DIR.clone().multiplyScalar(130), d);
+    this.renderer.toneMappingExposure = 1.3 - 0.35 * d;
+    // Night-only glows fade out by day: fireflies, fairy lights, lantern glow, mist.
+    if (this.fireflyMat) this.fireflyMat.uniforms.fade.value = 1 - d;
+    if (this.fairyMat) this.fairyMat.uniforms.fade.value = 1 - 0.8 * d;
+    if (this.lanternGlow)
+      (this.lanternGlow.material as THREE.PointsMaterial).opacity = this.lit
+        ? 0.6 * (1 - 0.8 * d)
+        : 0;
+    // The pond turns from moonlit navy to a clear sky-blue by day.
+    if (this.water) {
+      const wm = this.water.material as THREE.MeshStandardMaterial;
+      mix(NIGHT.water, DAY.water, wm.color);
+      mix(NIGHT.waterGlow, DAY.waterGlow, wm.emissive);
+      wm.metalness = 0.45 - 0.3 * d;
+      wm.emissiveIntensity = 0.7 - 0.25 * d;
+    }
+    if (this.moonPath)
+      (this.moonPath.material as THREE.MeshBasicMaterial).opacity =
+        0.35 * (1 - d);
+    for (const m of this.mists) {
+      const mm = m.material as THREE.SpriteMaterial;
+      mix(NIGHT.mist, DAY.mist, mm.color);
+      mm.opacity = 0.1 - 0.05 * d;
+    }
+    for (const p of this.puffs) {
+      const pm = p.s.material as THREE.SpriteMaterial;
+      mix(NIGHT.cloud, DAY.cloud, pm.color);
+      pm.opacity = (p.baseOpacity ?? 0.35) * (1 + 1.1 * d);
+    }
+    mix(NIGHT.bigCloud, DAY.bigCloud, this.bigCloudMat.color);
+    this.bigCloudMat.opacity = 0.55 + 0.25 * d;
+    if (this.lit && (this.calm || d > 0.98 || d < 0.02))
+      for (const l of this.warmLights) l.intensity = 60 * this.warmScale;
+    // Sun shadows only by day (they cost a second render pass).
+    const wantShadows = d > 0.5;
+    // (Re)mark meshes each time day begins, so people and wishes added later cast shadows too.
+    if (wantShadows && !this.keyLight.castShadow) this.enableShadows();
+    if (this.keyLight.castShadow !== wantShadows)
+      this.keyLight.castShadow = wantShadows;
+  }
+  private enableShadows() {
+    if (!this.shadowsReady) {
+      this.shadowsReady = true;
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      if (this.camera.aspect < 1.2)
+        this.keyLight.shadow.mapSize.set(1024, 1024);
+    }
+    this.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = m.material as THREE.Material;
+      if (mat && (mat.transparent || mat.type === "MeshBasicMaterial")) return;
+      m.castShadow = true;
+      m.receiveShadow = true;
+    });
   }
   setCandles(v: boolean) {
     this.candles = v;
@@ -1951,6 +2093,7 @@ export class FestivalWorld {
       }),
     );
     this.scene.add(sky);
+    this.skyMat = sky.material as THREE.ShaderMaterial;
     const n = 1500,
       pos = new Float32Array(n * 3),
       seed = new Float32Array(n);
@@ -1968,14 +2111,14 @@ export class FestivalWorld {
       transparent: true,
       depthWrite: false,
       fog: false,
-      uniforms: { time: { value: 0 } },
+      uniforms: { time: { value: 0 }, fade: { value: 1 } },
       vertexShader:
-        "attribute float seed; uniform float time; varying float a; void main(){ a = 0.45 + 0.55 * sin(time * (0.6 + fract(seed) * 1.4) + seed * 6.0); gl_PointSize = 1.6 + fract(seed * 3.7) * 2.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+        "attribute float seed; uniform float time; uniform float fade; varying float a; void main(){ a = fade * 0.45 + fade * 0.55 * sin(time * (0.6 + fract(seed) * 1.4) + seed * 6.0); gl_PointSize = 1.6 + fract(seed * 3.7) * 2.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
       fragmentShader:
         "varying float a; void main(){ float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(1.0, 0.97, 0.86, a * smoothstep(0.5, 0.1, d)); }",
     });
     this.scene.add(new THREE.Points(g, this.starMat));
-    const moonDir = new THREE.Vector3(34, 30, -120);
+    const moonDir = MOON_DIR.clone();
     // A soft crescent moon, as in the reference.
     const moonTex = canvasTexture(256, 256, (g) => {
       g.fillStyle = "#f4f1ff";
@@ -2002,10 +2145,49 @@ export class FestivalWorld {
     (halo.material as THREE.SpriteMaterial).fog = false;
     halo.position.copy(moonDir);
     this.scene.add(halo);
-    this.scene.add(new THREE.HemisphereLight("#9ea2e6", "#2b4a3c", 1.9));
+    this.moon = moon;
+    this.moonHalo = halo;
+    // The sun, high in the sky for day mode (hidden at night).
+    const sunTex = canvasTexture(128, 128, (g) => {
+      const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      r.addColorStop(0, "rgba(255,255,250,1)");
+      r.addColorStop(0.38, "rgba(255,250,228,1)");
+      r.addColorStop(0.46, "rgba(255,240,200,0.35)");
+      r.addColorStop(1, "rgba(255,236,190,0)");
+      g.fillStyle = r;
+      g.fillRect(0, 0, 128, 128);
+    });
+    this.sun = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: sunTex,
+        fog: false,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0,
+      }),
+    );
+    this.sun.scale.set(16, 16, 1);
+    this.sun.position.copy(SUN_DIR).multiplyScalar(170);
+    this.scene.add(this.sun);
+    this.sunHalo = glow("#fff4d6", 90, 0);
+    (this.sunHalo.material as THREE.SpriteMaterial).fog = false;
+    this.sunHalo.position.copy(this.sun.position);
+    this.scene.add(this.sunHalo);
+    this.hemi = new THREE.HemisphereLight("#9ea2e6", "#2b4a3c", 1.9);
+    this.scene.add(this.hemi);
     const moonLight = new THREE.DirectionalLight("#c9cfff", 1.2);
     moonLight.position.copy(moonDir);
     this.scene.add(moonLight);
+    this.keyLight = moonLight;
+    // Soft sun shadows in day mode, covering the whole garden.
+    const sc = moonLight.shadow.camera;
+    sc.left = sc.bottom = -42;
+    sc.right = sc.top = 42;
+    sc.near = 20;
+    sc.far = 260;
+    moonLight.shadow.mapSize.set(2048, 2048);
+    moonLight.shadow.bias = -0.0006;
+    moonLight.shadow.normalBias = 0.04;
     const cloudMat = new THREE.MeshLambertMaterial({
       color: "#3b3e70",
       transparent: true,
@@ -2020,6 +2202,7 @@ export class FestivalWorld {
       (m.material as THREE.SpriteMaterial).blending = THREE.NormalBlending;
       m.position.set(Math.cos(a) * r, 1.5 + (i % 2), Math.sin(a) * r);
       this.scene.add(m);
+      this.mists.push(m);
     }
     for (let i = 0; i < 7; i++) {
       const c = new THREE.Group();
@@ -2034,6 +2217,7 @@ export class FestivalWorld {
         puff.scale.y = 0.45;
         c.add(puff);
       }
+      this.bigCloudMat = cloudMat;
       c.position.set(-110 + i * 34, 42 + (i % 3) * 7, -95 + (i % 2) * 20);
       this.clouds.push(c);
       this.scene.add(c);
@@ -2048,6 +2232,7 @@ export class FestivalWorld {
           map: tex,
           transparent: true,
           opacity: 0.3 + ((i * 13) % 3) * 0.05,
+          color: NIGHT.cloud,
           depthWrite: false,
           fog: false,
         });
@@ -2061,6 +2246,7 @@ export class FestivalWorld {
         y: 17 + ((i * 5) % 5) * 1.6,
         speed: 0.0045 + ((i * 3) % 4) * 0.0012,
         bob: i * 1.7,
+        baseOpacity: mat.opacity,
       };
       this.puffs.push(puff);
       this.scene.add(sp);
@@ -2713,6 +2899,7 @@ export class FestivalWorld {
       POND.z - 2.5,
     );
     moonPath.rotation.x = -Math.PI / 2;
+    this.moonPath = moonPath;
     moonPath.scale.set(1.6, 3.5, 1);
     this.scene.add(moonPath);
     const pad = std("#5f8f68");
@@ -3449,9 +3636,9 @@ export class FestivalWorld {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { time: { value: 0 }, px: { value: 400 } },
+      uniforms: { time: { value: 0 }, px: { value: 400 }, fade: { value: 1 } },
       vertexShader:
-        "attribute float seed; uniform float time; uniform float px; varying float a; void main(){ vec3 p = position + vec3(sin(time*0.31+seed*7.0)*1.4, sin(time*0.53+seed*3.0)*0.45, cos(time*0.27+seed*5.0)*1.4); a = smoothstep(0.1, 1.0, sin(time*(0.9+fract(seed*3.1)*1.3)+seed*9.0)); vec4 mv = modelViewMatrix*vec4(p,1.0); gl_PointSize = 0.22*px/max(-mv.z,0.5); gl_Position = projectionMatrix*mv; }",
+        "attribute float seed; uniform float time; uniform float px; uniform float fade; varying float a; void main(){ vec3 p = position + vec3(sin(time*0.31+seed*7.0)*1.4, sin(time*0.53+seed*3.0)*0.45, cos(time*0.27+seed*5.0)*1.4); a = fade * smoothstep(0.1, 1.0, sin(time*(0.9+fract(seed*3.1)*1.3)+seed*9.0)); vec4 mv = modelViewMatrix*vec4(p,1.0); gl_PointSize = 0.22*px/max(-mv.z,0.5); gl_Position = projectionMatrix*mv; }",
       fragmentShader:
         "varying float a; void main(){ float d = length(gl_PointCoord-0.5); float core = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vec3(0.88,1.0,0.55)*1.4, a*core*core); }",
     });
@@ -3478,9 +3665,9 @@ export class FestivalWorld {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { time: { value: 0 }, px: { value: 400 } },
+      uniforms: { time: { value: 0 }, px: { value: 400 }, fade: { value: 1 } },
       vertexShader:
-        "attribute float seed; attribute vec3 color; uniform float time; uniform float px; varying vec3 vc; varying float a; void main(){ vc = color; a = 0.7 + 0.3*sin(time*(0.8+fract(seed)*2.2)+seed*12.0); vec4 mv = modelViewMatrix*vec4(position,1.0); gl_PointSize = clamp(0.34*px/max(-mv.z,0.5), 1.5, 40.0); gl_Position = projectionMatrix*mv; }",
+        "attribute float seed; attribute vec3 color; uniform float time; uniform float px; uniform float fade; varying vec3 vc; varying float a; void main(){ vc = color; a = fade * 0.7 + fade * 0.3*sin(time*(0.8+fract(seed)*2.2)+seed*12.0); vec4 mv = modelViewMatrix*vec4(position,1.0); gl_PointSize = clamp(0.34*px/max(-mv.z,0.5), 1.5, 40.0); gl_Position = projectionMatrix*mv; }",
       fragmentShader:
         "varying vec3 vc; varying float a; void main(){ float d = length(gl_PointCoord-0.5); float core = smoothstep(0.18, 0.0, d); float halo = smoothstep(0.5, 0.0, d)*0.45; gl_FragColor = vec4(vc*1.3 + core*0.4, a*(core + halo)); }",
     });
@@ -4219,6 +4406,14 @@ export class FestivalWorld {
     }
   }
   private updateAmbient(dt: number, t: number) {
+    if (this.dayT !== this.dayTarget) {
+      const step = dt / 1.5;
+      const next =
+        this.dayTarget > this.dayT
+          ? Math.min(this.dayTarget, this.dayT + step)
+          : Math.max(this.dayTarget, this.dayT - step);
+      this.applyDayNight(next);
+    }
     this.starMat.uniforms.time.value = this.calm ? 0 : t;
     this.fairyMat.uniforms.time.value = this.calm ? 0 : t;
     this.fireflyMat.uniforms.time.value = this.calm ? 2 : t;
@@ -4244,7 +4439,8 @@ export class FestivalWorld {
     }
     for (const l of this.warmLights)
       if (this.lit && !this.calm)
-        l.intensity = 60 + Math.sin(t * 7 + l.position.x) * 4;
+        l.intensity =
+          (60 + Math.sin(t * 7 + l.position.x) * 4) * this.warmScale;
   }
   private updateCamera(dt: number, watching: boolean) {
     const p = new THREE.Vector3(),

@@ -14,6 +14,8 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
+  Sun,
+  Moon,
   ArrowUp,
   ArrowDown,
   ArrowLeft,
@@ -401,6 +403,20 @@ export default function Home() {
   const [balloonColor, ChooseColor] = useState(0),
     [balloonShape, ChooseShape] = useState(0);
   const [eating, SetEating] = useState(false);
+  // Day or night for the whole garden; remembered on this device.
+  const [day, SetDay] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("little-lights-day") === "1") SetDay(true);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    world.current?.setDayMode(day);
+    try {
+      localStorage.setItem("little-lights-day", day ? "1" : "0");
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day, ready]);
   const [nearChild, SetNearChild] = useState<number | null>(null);
   // While the player eats, the table chats: one line every couple of seconds.
   const [chat, SetChat] = useState(-1);
@@ -923,6 +939,19 @@ export default function Home() {
             <Mail size={17} />
             <span>{t("Wishes in the wind", "ဆုတောင်းစာများ")}</span>
             <i>{shownWishes.length}</i>
+          </button>
+          <button
+            className="day-toggle"
+            aria-pressed={day}
+            onClick={() => SetDay((d) => !d)}
+            title={
+              day
+                ? t("Switch to night", "ညအဖြစ် ပြောင်းမယ်")
+                : t("Switch to day", "နေ့အဖြစ် ပြောင်းမယ်")
+            }
+          >
+            {day ? <Moon size={17} /> : <Sun size={17} />}
+            <span>{day ? t("Night", "ည") : t("Day", "နေ့")}</span>
           </button>
           <button className="language" onClick={() => L(mm ? "en" : "mm")}>
             {mm ? "English" : "မြန်မာ"}
