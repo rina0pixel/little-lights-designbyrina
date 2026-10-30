@@ -18,6 +18,8 @@ import {
   moveCharacter,
   type Position,
   isWalkable,
+  TABLE_SEAT,
+  TABLE_STAND,
 } from "./movement";
 
 export type WorldWish = {
@@ -33,6 +35,8 @@ type Events = {
   onMove: (p: Position, heading: number) => void;
   onWishClick: (id: string) => void;
   onReady?: () => void;
+  /** The player got up from the rice-ball table by moving away. */
+  onLeaveTable?: () => void;
   /** A child stopped to greet the player (index), or walked on (null). */
   onChildNear?: (index: number | null) => void;
 };
@@ -419,6 +423,7 @@ type RigState = {
   walking: boolean;
   pose: string;
   holding?: boolean; // gift visible in the hands (give / receive poses)
+  seated?: boolean | number; // sitting on a stool (a number blends sitting down / standing up)
   talking?: boolean; // party pose: this person is the one chatting
   lookAt?: number; // party pose: head turn (radians) towards whoever is talking
   kneel?: number; // 0 standing → 1 kneeling
@@ -428,6 +433,17 @@ type RigState = {
   calm: boolean;
 };
 function animateRig(r: Rig, s: RigState) {
+  animatePose(r, s);
+  if (s.seated) {
+    // Sitting on a stool: hips at stool height, legs forward under the table, plate on the table.
+    const k = s.seated === true ? 1 : s.seated;
+    r.body.position.y -= 0.04 * k;
+    r.body.rotation.x += 0.12 * k; // lean in towards the table
+    r.legL.rotation.x = r.legR.rotation.x = -1.5 * k;
+    if (k > 0.5) r.plate.visible = false;
+  }
+}
+function animatePose(r: Rig, s: RigState) {
   const t = s.t + s.phase;
   const swing = s.walking ? Math.sin(t * 9) * 0.55 : 0;
   r.legL.rotation.x = swing;
@@ -929,6 +945,20 @@ export class FestivalWorld {
     this.speaker = key;
   }
   private nearChild: number | null = null;
+  /** Sitting at the rice-ball table: sits down when the player starts eating. */
+  private seat: {
+    start: number;
+    from: { x: number; z: number; h: number };
+  } | null = null;
+  private leaveSeat(quiet = false) {
+    if (!this.seat) return;
+    this.seat = null;
+    this.pos = { ...TABLE_STAND };
+    this.heading = 0; // facing away from the table, ready to walk off
+    this.lastSent.at = -1;
+    this.events.onMove({ ...this.pos }, this.heading);
+    if (!quiet) this.events.onLeaveTable?.();
+  }
   private children: {
     rig: Rig;
     toy: THREE.Group;
@@ -1099,6 +1129,12 @@ export class FestivalWorld {
     this.scene.add(this.player.root);
   }
   setPose(p: PlayerPose) {
+    if (p === "eating" && !this.seat)
+      this.seat = {
+        start: this.time,
+        from: { x: this.pos.x, z: this.pos.z, h: this.heading },
+      };
+    if (p !== "eating" && this.seat) this.leaveSeat(true);
     this.pose = p;
     this.friendHappy = p === "giving";
   }
@@ -1215,6 +1251,57 @@ export class FestivalWorld {
     return true;
   }
   private giftHeldUntil = -1;
+  /** Seated at the table. Returns true while the player is sitting (any move key gets up). */
+  private updateSeat(t: number, watching: boolean) {
+    const s = this.seat;
+    if (!s || !this.player) return false;
+    const e = t - s.start;
+    const k = this.keys;
+    const wantsToMove = [
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight",
+      "w",
+      "a",
+      "s",
+      "d",
+    ].some((key) => k.has(key));
+    if (wantsToMove && e > 1) {
+      this.leaveSeat();
+      return false;
+    }
+    // 0–0.7 s: walk to the stool and turn to the table; 0.7–1.1 s: sit down.
+    const clamp = (x: number) => Math.min(1, Math.max(0, x)),
+      sm = (x: number) => x * x * (3 - 2 * x),
+      w = sm(clamp(e / 0.7)),
+      sit = sm(clamp((e - 0.7) / 0.4));
+    this.pos = {
+      x: s.from.x + (TABLE_SEAT.x - s.from.x) * w,
+      z: s.from.z + (TABLE_SEAT.z - s.from.z) * w,
+    };
+    let dh = TABLE_SEAT.heading - s.from.h;
+    dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    this.heading = s.from.h + dh * w;
+    this.player.root.position.set(this.pos.x, 0, this.pos.z);
+    this.player.root.rotation.y = this.heading;
+    animateRig(this.player, {
+      walking: e < 0.7,
+      seated: sit,
+      pose: watching
+        ? "watching"
+        : sit > 0.5
+          ? this.speaker === "player"
+            ? "party"
+            : "eating"
+          : "",
+      talking: this.speaker === "player",
+      t,
+      phase: 0,
+      calm: this.calm,
+    });
+    return true;
+  }
   get lightingCandles() {
     return !!this.rite;
   }
@@ -1535,6 +1622,7 @@ export class FestivalWorld {
     this.walkTo(SPOTS[id], SPOT_FACING[id], onArrive);
   }
   walkTo(target: Position, face?: number, onArrive?: () => void) {
+    if (this.seat) this.leaveSeat();
     if (this.calm) {
       // Reduced motion: no long walks, just arrive.
       const path = findPath(this.pos, target);
@@ -1610,6 +1698,7 @@ export class FestivalWorld {
   }
   /** Test hook: jump the player to a spot (used by automated play-tests). */
   teleport(p: Position, heading = this.heading) {
+    if (this.seat) this.leaveSeat();
     this.pos = { ...p };
     this.heading = heading;
     this.orbitYaw = 0;
@@ -2141,6 +2230,61 @@ export class FestivalWorld {
     g.position.set(TABLE.x, 0, TABLE.z);
     const wood = std("#b98657"),
       dark = std("#7d5638");
+    // A wooden stool for each seat, and a small plate with a rice ball in front of it.
+    const seats = [
+      { x: TABLE_SEAT.x, z: TABLE_SEAT.z },
+      FRIENDS.two,
+      FRIENDS.three,
+    ];
+    for (const seat of seats) {
+      const lx = seat.x - TABLE.x,
+        lz = seat.z - TABLE.z,
+        len = Math.hypot(lx, lz);
+      g.add(
+        mesh(
+          new THREE.CylinderGeometry(0.3, 0.26, 0.08, 14),
+          wood,
+          lx,
+          0.25,
+          lz,
+        ),
+      );
+      for (const [ox, oz] of [
+        [0.16, 0.16],
+        [-0.16, 0.16],
+        [0.16, -0.16],
+        [-0.16, -0.16],
+      ])
+        g.add(
+          mesh(
+            new THREE.CylinderGeometry(0.035, 0.04, 0.24, 6),
+            dark,
+            lx + ox,
+            0.12,
+            lz + oz,
+          ),
+        );
+      const px = (lx / len) * 1.6,
+        pz = (lz / len) * 1.6;
+      g.add(
+        mesh(
+          new THREE.CylinderGeometry(0.24, 0.2, 0.03, 18),
+          std("#f3ead6"),
+          px,
+          0.86,
+          pz,
+        ),
+      );
+      g.add(
+        mesh(
+          new THREE.SphereGeometry(0.09, 10, 8),
+          std("#fff3dc"),
+          px + 0.05,
+          0.93,
+          pz,
+        ),
+      );
+    }
     g.add(
       mesh(
         new THREE.CylinderGeometry(TABLE.r - 0.2, TABLE.r - 0.2, 0.12, 32),
@@ -3347,6 +3491,7 @@ export class FestivalWorld {
   private updatePlayer(dt: number, t: number, watching: boolean) {
     if (this.updateRite(t)) return;
     if (this.updateGift(t)) return;
+    if (this.updateSeat(t, watching)) return;
     const k = this.keys;
     const turn =
       Number(k.has("ArrowLeft") || k.has("a")) -
@@ -3473,6 +3618,7 @@ export class FestivalWorld {
         }
         animateRig(f.rig, {
           walking: false,
+          seated: true,
           pose: "party",
           talking: this.speaker === f.key,
           lookAt: this.speaker === f.key ? 0 : look,
@@ -3492,6 +3638,7 @@ export class FestivalWorld {
       } else f.rig.root.rotation.y = f.heading;
       animateRig(f.rig, {
         walking: false,
+        seated: f.eating,
         pose: watching
           ? "watching"
           : happy
@@ -3518,7 +3665,12 @@ export class FestivalWorld {
     }
     // While a child greets a player who is standing still, ease the camera a little to the
     // side so the child is not hidden behind the player.
-    if (this.nearChild !== null && !this.route && !this.keys.size && !this.drag) {
+    if (
+      this.nearChild !== null &&
+      !this.route &&
+      !this.keys.size &&
+      !this.drag
+    ) {
       const c = this.children[this.nearChild];
       let rel =
         Math.atan2(c.pos.x - this.pos.x, c.pos.z - this.pos.z) - this.heading;

@@ -37,8 +37,9 @@ export const ARCH_POSTS: Position[] = [
 ];
 export const FRIENDS = {
   one: { x: -20.5, z: 12.2, heading: Math.PI / 2 },
-  two: { x: -14.6, z: 9.2, heading: Math.PI * 0.2 },
-  three: { x: -9.4, z: 9.2, heading: -Math.PI * 0.2 },
+  // Two and three sit on stools at the rice-ball table, facing its centre.
+  two: { x: -14.1, z: 9.55, heading: 0.96 },
+  three: { x: -9.9, z: 9.55, heading: -0.96 },
 };
 
 // Where each activity happens. The marker floats above this point.
@@ -92,10 +93,10 @@ export function findPath(from: Position, to: Position): Position[] | null {
       for (let c = 0; c < cols; c++)
         if (walk[r * cols + c] === 1) {
           const d = (c - gc) ** 2 + (r - gr) ** 2;
-          if (d < bestD) (bestD = d), (best = r * cols + c);
+          if (d < bestD) ((bestD = d), (best = r * cols + c));
         }
     if (best < 0) return null;
-    (gc = best % cols), (gr = Math.floor(best / cols));
+    ((gc = best % cols), (gr = Math.floor(best / cols)));
   }
   if (!ok(sc, sr)) walk[sr * cols + sc] = 1;
   const goal = gr * cols + gc,
@@ -169,6 +170,10 @@ const BODY = 0.45; // player's collision radius
 export function distance(a: Position, b: Position) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
+/** The player's stool at the rice-ball table (inside the table's collider, so the world
+ * moves the player there and back), and where they stand up to. */
+export const TABLE_SEAT = { x: TABLE.x, z: TABLE.z + 2.55, heading: Math.PI };
+export const TABLE_STAND = { x: TABLE.x, z: TABLE.z + 3.7 };
 export function isNearTable(p: Position): boolean {
   return distance(p, TABLE) <= TABLE.r + 3.2;
 }

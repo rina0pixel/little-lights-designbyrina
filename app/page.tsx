@@ -611,6 +611,7 @@ export default function Home() {
         },
         onReady: () => SetReady(true),
         onChildNear: (i) => SetNearChild(i),
+        onLeaveTable: () => SetEating(false),
       });
     } catch {
       SetNoWebGL(true);
