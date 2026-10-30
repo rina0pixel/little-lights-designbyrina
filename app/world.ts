@@ -29,6 +29,22 @@ export type WorldWish = {
   shape?: number | null;
 };
 export type PlayerPose = "" | "eating" | "giving";
+/** Day mode: where worshippers kneel before the pagoda (just outside its boundary, clear of
+ * the player's own candle spot in the middle), and the garden points they stroll to. */
+const PRAY_SPOTS = [-0.75, -0.42, 0.42, 0.75].map((a) => ({
+  x: PAGODA.x + Math.sin(a) * 7.9,
+  z: PAGODA.z + Math.cos(a) * 7.9,
+}));
+const WANDER = [
+  { x: -6, z: 2 },
+  { x: 8, z: 0 },
+  { x: -2, z: 17 },
+  { x: 20, z: -4 },
+  { x: -12, z: -1 },
+  { x: 3, z: 21 },
+  { x: -9, z: -6 },
+  { x: 10, z: 22 },
+];
 /** Where the player kneels at the pond's west edge to set a lotus wish on the water. */
 const POND_KNEEL = {
   x: POND.x - POND.rx - 0.5,
@@ -1102,6 +1118,20 @@ export class FestivalWorld {
     this.speaker = key;
   }
   private nearChild: number | null = null;
+  /* Day-only people (hidden at night, when the night scene stays exactly as it was). */
+  private worshippers: {
+    rig: Rig;
+    pos: Position;
+    heading: number;
+    path: Position[];
+    mode: "walk" | "pray" | "rest";
+    until: number;
+    start: number;
+    spot: number;
+  }[] = [];
+  private parents: { rig: Rig; pos: Position; heading: number }[] = [];
+  private homage: ({ start: number } | null)[] = [];
+  private lastSeg: number[] = [];
   private myMeal: THREE.Group | null = null;
   /** The lotus moment: kneel at the water, set the lotus down, then pray. */
   private lotusRite: {
@@ -3757,7 +3787,146 @@ export class FestivalWorld {
         pos: { ...route[0] },
         dir: 0,
       });
+      // By day, each child's parent waits at the corner where the child comes in.
+      const last = route[route.length - 1],
+        first = route[0],
+        len = Math.hypot(first.x - last.x, first.z - last.z) || 1,
+        ux = (first.x - last.x) / len,
+        uz = (first.z - last.z) / len;
+      const parent = makePerson(["#6d8fae", "#c9a06a", "#a07fb0"][i], i + 1);
+      const ppos = { x: first.x + ux * 1.15, z: first.z + uz * 1.15 };
+      parent.root.position.set(ppos.x, 0, ppos.z);
+      parent.root.rotation.y = Math.atan2(-ux, -uz);
+      parent.root.visible = false;
+      this.scene.add(parent.root);
+      this.parents.push({
+        rig: parent,
+        pos: ppos,
+        heading: Math.atan2(-ux, -uz),
+      });
+      this.homage.push(null);
+      this.lastSeg.push(i % route.length);
     });
+    // By day, a few people come to pray at the pagoda, then stroll around the garden.
+    ["#7f9fb8", "#c48a6e", "#9ab07a", "#b48fc0"].forEach((color, i) => {
+      const rig = makePerson(color, i);
+      rig.root.visible = false;
+      this.scene.add(rig.root);
+      const pos = WANDER[(i * 3) % WANDER.length];
+      this.worshippers.push({
+        rig,
+        pos: { ...pos },
+        heading: 0,
+        path: [],
+        mode: "rest",
+        until: 1 + i * 2.2, // stagger, so they arrive one after another
+        start: 0,
+        spot: -1,
+      });
+    });
+  }
+  /** Day-only life: worshippers at the pagoda, and children paying respect to their parents. */
+  private updateDayPeople(dt: number, t: number, watching: boolean) {
+    const show = this.dayT > 0.5;
+    for (const w of this.worshippers) w.rig.root.visible = show;
+    for (const p of this.parents) p.rig.root.visible = show;
+    if (!show) return;
+    const clamp = (x: number) => Math.min(1, Math.max(0, x)),
+      sm = (x: number) => x * x * (3 - 2 * x);
+    // Parents stand calmly; they turn to their child while the child pays respect.
+    this.parents.forEach((p, i) => {
+      const h = this.homage[i],
+        c = this.children[i];
+      const face = h
+        ? Math.atan2(c.pos.x - p.pos.x, c.pos.z - p.pos.z)
+        : p.heading;
+      p.rig.root.rotation.y = face;
+      animateRig(p.rig, {
+        walking: false,
+        pose: watching ? "watching" : h && t - h.start > 0.6 ? "happy" : "",
+        t,
+        phase: i * 2.1,
+        calm: true, // a gentle, still stance
+      });
+    });
+    for (const w of this.worshippers) {
+      if (watching) {
+        animateRig(w.rig, {
+          walking: false,
+          pose: "watching",
+          t,
+          phase: 0,
+          calm: this.calm,
+        });
+        continue;
+      }
+      if (w.mode === "rest" && t >= w.until) {
+        // Head to a free place in front of the pagoda.
+        const taken = new Set(this.worshippers.map((o) => o.spot));
+        const free = PRAY_SPOTS.map((_, k) => k).filter((k) => !taken.has(k));
+        const k = free[Math.floor(Math.random() * free.length)] ?? 0;
+        w.spot = k;
+        w.path = findPath(w.pos, PRAY_SPOTS[k]) ?? [PRAY_SPOTS[k]];
+        w.mode = "walk";
+      }
+      if (w.mode === "walk") {
+        const target = w.path[0];
+        if (!target) {
+          if (w.spot >= 0) {
+            w.mode = "pray";
+            w.start = t;
+            w.heading = Math.atan2(PAGODA.x - w.pos.x, PAGODA.z - w.pos.z);
+          } else {
+            w.mode = "rest";
+            w.until = t + 2 + Math.random() * 4;
+          }
+        } else {
+          const dx = target.x - w.pos.x,
+            dz = target.z - w.pos.z,
+            d = Math.hypot(dx, dz);
+          if (d < 0.2) w.path.shift();
+          else {
+            const step = Math.min(d, 1.5 * dt);
+            w.pos = {
+              x: w.pos.x + (dx / d) * step,
+              z: w.pos.z + (dz / d) * step,
+            };
+            let dh = Math.atan2(dx, dz) - w.heading;
+            dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+            w.heading += dh * Math.min(1, dt * 8);
+          }
+        }
+      }
+      let pose = "",
+        kneel = 0,
+        reach = 0;
+      if (w.mode === "pray") {
+        // Kneel 0–0.5 s, palms together and bow 0.5–3.2 s, stand up 3.2–3.7 s.
+        const e = t - w.start;
+        kneel = sm(clamp(e / 0.5)) * (1 - sm(clamp((e - 3.2) / 0.5)));
+        reach = sm(clamp((e - 0.4) / 0.4)) * (1 - sm(clamp((e - 2.9) / 0.4)));
+        pose = "pray";
+        if (e > 3.7) {
+          // Off for a stroll around the garden.
+          const to = WANDER[Math.floor(Math.random() * WANDER.length)];
+          w.spot = -1;
+          w.path = findPath(w.pos, to) ?? [to];
+          w.mode = "walk";
+          pose = "";
+        }
+      }
+      w.rig.root.position.set(w.pos.x, 0, w.pos.z);
+      w.rig.root.rotation.y = w.heading;
+      animateRig(w.rig, {
+        walking: w.mode === "walk",
+        pose,
+        kneel,
+        reach,
+        t,
+        phase: w.heading,
+        calm: this.calm,
+      });
+    }
   }
   private buildFireworkLights() {
     for (let i = 0; i < 3; i++) {
@@ -4008,6 +4177,7 @@ export class FestivalWorld {
       this.fireworkStart >= 0 && t - this.fireworkStart < FIREWORK_SHOW_SECONDS;
     this.updatePlayer(dt, t, watching);
     this.updatePeople(dt, t, watching);
+    this.updateDayPeople(dt, t, watching);
     this.updateWishes(t);
     this.updateFireworks(t);
     this.updateAmbient(dt, t);
@@ -4216,7 +4386,21 @@ export class FestivalWorld {
       let a = c.route[c.seg],
         b = c.route[(c.seg + 1) % n];
       const greeting = ci === this.nearChild;
-      if (!watching && !this.calm && !greeting) {
+      // By day: each time a child comes round to their parent, they kneel and pay respect.
+      const day = this.dayT > 0.5;
+      if (
+        day &&
+        this.lastSeg[ci] !== c.seg &&
+        c.seg === 0 &&
+        !greeting &&
+        !watching
+      )
+        this.homage[ci] = { start: t };
+      this.lastSeg[ci] = c.seg;
+      const hom = day ? this.homage[ci] : null;
+      if (hom && t - hom.start > 3.8) this.homage[ci] = null;
+      const paying = !!hom && t - hom.start <= 3.8;
+      if (!watching && !this.calm && !greeting && !paying) {
         c.along += dt * c.speed;
         let len = Math.hypot(b.x - a.x, b.z - a.z);
         while (c.along >= len) {
@@ -4231,12 +4415,27 @@ export class FestivalWorld {
       c.pos = { x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u };
       c.dir = Math.atan2(b.x - a.x, b.z - a.z);
       c.rig.root.position.set(c.pos.x, 0, c.pos.z);
+      const par = this.parents[ci];
       c.rig.root.rotation.y = greeting
         ? Math.atan2(this.pos.x - c.pos.x, this.pos.z - c.pos.z)
-        : c.dir;
+        : paying
+          ? Math.atan2(par.pos.x - c.pos.x, par.pos.z - c.pos.z)
+          : c.dir;
+      let hk = 0,
+        hr = 0;
+      if (paying && hom) {
+        // Kneel 0–0.5 s, praying hands and a little bow 0.5–3.2 s, up again by 3.8 s.
+        const e = t - hom.start,
+          cl = (x: number) => Math.min(1, Math.max(0, x)),
+          sm = (x: number) => x * x * (3 - 2 * x);
+        hk = sm(cl(e / 0.5)) * (1 - sm(cl((e - 3.2) / 0.5)));
+        hr = sm(cl((e - 0.4) / 0.4)) * (1 - sm(cl((e - 2.9) / 0.4)));
+      }
       animateRig(c.rig, {
-        walking: !watching && !this.calm && !greeting,
-        pose: watching ? "watching" : greeting ? "wave" : "",
+        walking: !watching && !this.calm && !greeting && !paying,
+        kneel: hk,
+        reach: hr,
+        pose: watching ? "watching" : greeting ? "wave" : paying ? "pray" : "",
         t,
         phase: c.speed * 5,
         calm: this.calm,
