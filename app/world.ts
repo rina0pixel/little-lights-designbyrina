@@ -33,6 +33,8 @@ type Events = {
   onMove: (p: Position, heading: number) => void;
   onWishClick: (id: string) => void;
   onReady?: () => void;
+  /** A child stopped to greet the player (index), or walked on (null). */
+  onChildNear?: (index: number | null) => void;
 };
 
 export const AVATAR_COLORS = ["#e78899", "#5b9f93", "#e8ac55", "#9c8ac7"];
@@ -417,6 +419,8 @@ type RigState = {
   walking: boolean;
   pose: string;
   holding?: boolean; // gift visible in the hands (give / receive poses)
+  talking?: boolean; // party pose: this person is the one chatting
+  lookAt?: number; // party pose: head turn (radians) towards whoever is talking
   kneel?: number; // 0 standing → 1 kneeling
   reach?: number; // 0 arm down → 1 arm reaching forward with the taper
   t: number;
@@ -479,6 +483,40 @@ function animateRig(r: Rig, s: RigState) {
     if (s.holding && !s.calm)
       r.body.position.y = Math.abs(Math.sin(t * 6)) * 0.05;
     r.head.rotation.x = s.holding ? -0.1 : 0.1;
+    return;
+  }
+  r.head.rotation.y = r.head.rotation.z = 0;
+  if (s.pose === "party") {
+    // Eating together: nibbling, turning to whoever is talking, giggling.
+    const talk = s.talking ? 1 : 0,
+      look = s.lookAt ?? 0;
+    r.plate.visible = r.riceBall.visible = true;
+    r.armL.rotation.x = -1.05;
+    r.head.rotation.y = look;
+    if (s.calm) {
+      r.armR.rotation.x = -1.6;
+      return;
+    }
+    if (talk) {
+      // Chatting: the free hand gestures and the head bobs.
+      r.armR.rotation.x = -1.2 - Math.sin(t * 5) * 0.35;
+      r.armR.rotation.z = 0.18 + Math.sin(t * 3.3) * 0.15;
+      r.head.rotation.x = Math.sin(t * 9) * 0.08;
+    } else {
+      // Listening: a bite now and then, and a giggle.
+      r.armR.rotation.x = -1.8 - Math.max(0, Math.sin(t * 2.2)) * 0.5;
+      const giggle = Math.max(0, Math.sin(t * 1.3));
+      r.body.position.y = Math.abs(Math.sin(t * 16)) * 0.035 * giggle;
+      r.head.rotation.z = Math.sin(t * 2.1) * 0.12 * giggle;
+      r.head.rotation.x = 0.06 - giggle * 0.12;
+    }
+    return;
+  }
+  if (s.pose === "wave") {
+    r.armR.rotation.x = -2.7;
+    r.armR.rotation.z = 0.25 + (s.calm ? 0 : Math.sin(t * 8) * 0.3);
+    r.head.rotation.x = -0.15;
+    r.body.position.y = s.calm ? 0 : Math.abs(Math.sin(t * 4)) * 0.03;
     return;
   }
   if (s.pose === "watching") {
@@ -885,6 +923,12 @@ export class FestivalWorld {
     eating: boolean;
   }[] = [];
   private friendHappy = false;
+  /** Who is chatting at the rice-ball table right now ("friend-two", "friend-three", "player"). */
+  private speaker = "";
+  setSpeaker(key: string) {
+    this.speaker = key;
+  }
+  private nearChild: number | null = null;
   private children: {
     rig: Rig;
     toy: THREE.Group;
@@ -3405,6 +3449,39 @@ export class FestivalWorld {
         });
         return;
       }
+      if (f.eating && this.pose === "eating" && !watching) {
+        // The player has joined the table: everyone eats, chats and giggles together.
+        f.rig.root.rotation.y = f.heading;
+        const others = [
+          ...this.friends
+            .filter((o) => o !== f && o.eating)
+            .map((o) => ({ key: o.key, p: o.rig.root.position })),
+          { key: "player", p: this.player?.root.position },
+        ];
+        const who =
+          others.find((o) => o.key === this.speaker) ??
+          others.find((o) => o.key === "player")!;
+        let look = 0;
+        if (who.p) {
+          look =
+            Math.atan2(
+              who.p.x - f.rig.root.position.x,
+              who.p.z - f.rig.root.position.z,
+            ) - f.heading;
+          look = Math.atan2(Math.sin(look), Math.cos(look));
+          look = Math.max(-0.9, Math.min(0.9, look));
+        }
+        animateRig(f.rig, {
+          walking: false,
+          pose: "party",
+          talking: this.speaker === f.key,
+          lookAt: this.speaker === f.key ? 0 : look,
+          t,
+          phase: i * 1.3,
+          calm: this.calm,
+        });
+        return;
+      }
       const happy = one && this.friendHappy;
       if (happy) {
         // Turn to face the player while receiving the gift.
@@ -3427,11 +3504,34 @@ export class FestivalWorld {
         calm: this.calm,
       });
     });
-    for (const c of this.children) {
+    // The nearest child within reach stops to greet the player (leaves again past 4.2 m).
+    let near: number | null = null,
+      best = Infinity;
+    this.children.forEach((c, i) => {
+      const d = Math.hypot(c.pos.x - this.pos.x, c.pos.z - this.pos.z);
+      const reach = this.nearChild === i ? 4.2 : 3.2;
+      if (d < reach && d < best && !watching) ((best = d), (near = i));
+    });
+    if (near !== this.nearChild) {
+      this.nearChild = near;
+      this.events.onChildNear?.(near);
+    }
+    // While a child greets a player who is standing still, ease the camera a little to the
+    // side so the child is not hidden behind the player.
+    if (this.nearChild !== null && !this.route && !this.keys.size && !this.drag) {
+      const c = this.children[this.nearChild];
+      let rel =
+        Math.atan2(c.pos.x - this.pos.x, c.pos.z - this.pos.z) - this.heading;
+      rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+      const want = rel > 0 ? -0.6 : 0.6;
+      this.orbitYaw += (want - this.orbitYaw) * Math.min(1, dt * 1.5);
+    }
+    this.children.forEach((c, ci) => {
       const n = c.route.length;
       let a = c.route[c.seg],
         b = c.route[(c.seg + 1) % n];
-      if (!watching && !this.calm) {
+      const greeting = ci === this.nearChild;
+      if (!watching && !this.calm && !greeting) {
         c.along += dt * c.speed;
         let len = Math.hypot(b.x - a.x, b.z - a.z);
         while (c.along >= len) {
@@ -3446,10 +3546,12 @@ export class FestivalWorld {
       c.pos = { x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u };
       c.dir = Math.atan2(b.x - a.x, b.z - a.z);
       c.rig.root.position.set(c.pos.x, 0, c.pos.z);
-      c.rig.root.rotation.y = c.dir;
+      c.rig.root.rotation.y = greeting
+        ? Math.atan2(this.pos.x - c.pos.x, this.pos.z - c.pos.z)
+        : c.dir;
       animateRig(c.rig, {
-        walking: !watching && !this.calm,
-        pose: watching ? "watching" : "",
+        walking: !watching && !this.calm && !greeting,
+        pose: watching ? "watching" : greeting ? "wave" : "",
         t,
         phase: c.speed * 5,
         calm: this.calm,
@@ -3472,7 +3574,7 @@ export class FestivalWorld {
         .add(c.toy.position);
       pos.setXYZ(1, nose.x, nose.y, nose.z);
       pos.needsUpdate = true;
-    }
+    });
   }
   private updateWishes(t: number) {
     for (const w of this.wishes.values()) {

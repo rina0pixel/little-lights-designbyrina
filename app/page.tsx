@@ -333,6 +333,28 @@ const fireworkTypes = [
   },
   { en: "Golden willow", mm: "ရွှေရောင်မိုးမခ", color: "#ffc58a", symbol: "❋" },
 ];
+/** Happy chatter at the rice-ball table while the player eats: [speaker, English, Burmese]. */
+const TABLE_CHAT: [string, string, string][] = [
+  ["friend-two", "So yummy!", "အရမ်းစားလို့ကောင်းတယ်။"],
+  ["friend-three", "Hehe! ♡", "ဟဲဟဲ။ ♡"],
+  ["player", "Mmm, sweet!", "ချိုလိုက်တာ။"],
+  ["friend-three", "Just like grandma makes!", "အဖွားလုပ်တာနဲ့ တူတယ်။"],
+  ["friend-two", "Haha! Have another one!", "ဟားဟား။ နောက်တစ်လုံး ထပ်စားဦး။"],
+  ["player", "Hehe, thank you!", "ဟဲဟဲ၊ ကျေးဇူးပါ။"],
+  [
+    "friend-three",
+    "You have sugar on your cheek!",
+    "ပါးပေါ်မှာ သကြားတွေ ပေနေတယ်။",
+  ],
+  ["friend-two", "Hahaha!", "ဟားဟားဟား။"],
+];
+/** What each child says when the player walks up to them. */
+const CHILD_GREETINGS: [string, string][] = [
+  ["Have a wonderful time!", "ပျော်ပျော်ရွှင်ရွှင် ဖြတ်သန်းပါ။"],
+  ["Happy Thadingyut!", "ပျော်ရွှင်ဖွယ် သီတင်းကျွတ်ပါ။"],
+  ["Tonight is very beautiful!", "ဒီည အရမ်းလှတယ်။"],
+];
+
 /** Owner credit, kept small and quiet: page footer, welcome dialog and end-of-evening dialog. */
 const OWNER_URL = "https://designwithrina.com";
 function Credit({ lead }: { lead?: string }) {
@@ -379,6 +401,34 @@ export default function Home() {
   const [balloonColor, ChooseColor] = useState(0),
     [balloonShape, ChooseShape] = useState(0);
   const [eating, SetEating] = useState(false);
+  const [nearChild, SetNearChild] = useState<number | null>(null);
+  // While the player eats, the table chats: one line every couple of seconds.
+  const [chat, SetChat] = useState(-1);
+  useEffect(() => {
+    if (!eating) {
+      SetChat(-1);
+      world.current?.setSpeaker("");
+      return;
+    }
+    let i = 0;
+    const say = () => {
+      SetChat(i);
+      world.current?.setSpeaker(TABLE_CHAT[i][0]);
+      i = (i + 1) % TABLE_CHAT.length;
+    };
+    const first = setTimeout(say, 900);
+    const timer = setInterval(say, 2300);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [eating]);
+  const chatLine = (key: string) =>
+    chat >= 0 && TABLE_CHAT[chat][0] === key ? (
+      <span className="bubble chat-bubble" key={chat}>
+        {t(TABLE_CHAT[chat][1], TABLE_CHAT[chat][2])}
+      </span>
+    ) : null;
   const [release, Release] = useState<string | null>(null);
   const sceneRef = useRef<HTMLDivElement>(null),
     world = useRef<FestivalWorld | null>(null),
@@ -560,6 +610,7 @@ export default function Home() {
           if (found) Let(found);
         },
         onReady: () => SetReady(true),
+        onChildNear: (i) => SetNearChild(i),
       });
     } catch {
       SetNoWebGL(true);
@@ -982,6 +1033,7 @@ export default function Home() {
           </div>
           <div className="anchor person-anchor" data-anchor="friend-two">
             <div className="label-stack">
+              {chatLine("friend-two")}
               {watching && (
                 <span className="sky-reaction">
                   {t("Happy Thadingyut!", "ပျော်ရွှင်ဖွယ် သီတင်းကျွတ်ပါ။")}
@@ -991,6 +1043,7 @@ export default function Home() {
           </div>
           <div className="anchor person-anchor" data-anchor="friend-three">
             <div className="label-stack">
+              {chatLine("friend-three")}
               {watching && (
                 <span className="sky-reaction">
                   {t("Pretty!", "လှလိုက်တာ။")}
@@ -1015,21 +1068,29 @@ export default function Home() {
                     )}
                   </span>
                 )}
+                {!watching && nearChild === i && (
+                  <span className="bubble chat-bubble child-greeting">
+                    {t(CHILD_GREETINGS[i][0], CHILD_GREETINGS[i][1])}
+                  </span>
+                )}
               </div>
             </div>
           ))}
           {started && (
             <div className="anchor person-anchor" data-anchor="player">
               <div className="label-stack">
+                {chatLine("player")}
                 {watching && (
                   <span className="sky-reaction">
                     {t("So magical!", "အံ့ဩစရာလေး။")}
                   </span>
                 )}
-                <span className="name-tag">
-                  {name || t("You", "သင်")}{" "}
-                  {name && <small>{t("YOU", "သင်")}</small>}
-                </span>
+                {nearChild === null && (
+                  <span className="name-tag">
+                    {name || t("You", "သင်")}{" "}
+                    {name && <small>{t("YOU", "သင်")}</small>}
+                  </span>
+                )}
               </div>
             </div>
           )}
