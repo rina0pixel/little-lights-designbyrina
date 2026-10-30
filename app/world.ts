@@ -29,6 +29,17 @@ export type WorldWish = {
   shape?: number | null;
 };
 export type PlayerPose = "" | "eating" | "giving";
+/** Where the player kneels at the pond's west edge to set a lotus wish on the water. */
+const POND_KNEEL = {
+  x: POND.x - POND.rx - 0.5,
+  z: SPOTS.lotus.z,
+  heading: Math.PI / 2,
+};
+const POND_WATER = new THREE.Vector3(
+  POND.x - POND.rx + 0.4,
+  0.06,
+  SPOTS.lotus.z,
+);
 /** Where the player kneels to light the first candle, in front of the pagoda. */
 const KNEEL = { x: 0, z: PAGODA.z + 7.55 };
 type Events = {
@@ -466,6 +477,26 @@ function animateRig(r: Rig, s: RigState) {
     r.body.rotation.x += 0.1 * k; // lean in towards the table
     if (k > 0.5) r.plate.visible = false;
   }
+  // Kneeling (sitting back on the heels): sit lower, the longyi gathers above the ground and
+  // the lap folds forward on the ground, so it clearly reads as kneeling.
+  const kk =
+    s.pose === "kneel" || s.pose === "offer" || s.pose === "pray"
+      ? (s.kneel ?? 1)
+      : 0;
+  if (kk > 0 && !k) {
+    r.body.position.y -= 0.14 * kk;
+    const by = r.body.position.y,
+      sc = 1 - 0.42 * kk;
+    r.skirt.scale.y = sc;
+    r.skirt.position.y = Math.max(0.5, 0.08 - by + 0.31 * sc);
+    r.lap.visible = kk > 0.05;
+    r.lap.scale.z = 0.9 * Math.max(0.05, kk);
+    r.lap.position.y = 0.4 + (0.17 - by - 0.4) * kk;
+    r.legL.visible = r.legR.visible = kk < 0.6;
+  } else {
+    r.lap.position.y = 0.4;
+    r.legL.visible = r.legR.visible = true;
+  }
 }
 function animatePose(r: Rig, s: RigState) {
   const t = s.t + s.phase;
@@ -550,6 +581,32 @@ function animatePose(r: Rig, s: RigState) {
       r.head.rotation.z = Math.sin(t * 2.1) * 0.12 * giggle;
       r.head.rotation.x = 0.06 - giggle * 0.12;
     }
+    return;
+  }
+  if (s.pose === "offer") {
+    // Kneeling, holding the lotus in both hands in front, then lowering it to the water.
+    const k = s.kneel ?? 1,
+      reach = s.reach ?? 0;
+    r.legL.rotation.x = r.legR.rotation.x = 1.45 * k;
+    r.body.position.y = -0.3 * k;
+    r.body.rotation.x = 0.1 * k + 0.35 * reach;
+    r.armL.rotation.x = r.armR.rotation.x = -1.0 - 0.25 * reach;
+    r.armL.rotation.z = -0.18 + 0.45;
+    r.armR.rotation.z = 0.18 - 0.45;
+    r.head.rotation.x = 0.2 + 0.2 * reach;
+    return;
+  }
+  if (s.pose === "pray") {
+    // Kneeling with palms pressed together in front of the chest, head gently bowed.
+    const k = s.kneel ?? 1,
+      p = s.reach ?? 1;
+    r.legL.rotation.x = r.legR.rotation.x = 1.45 * k;
+    r.body.position.y = -0.3 * k;
+    r.body.rotation.x = 0.06 * k;
+    r.armL.rotation.x = r.armR.rotation.x = -0.25 - 0.75 * p;
+    r.armL.rotation.z = -0.18 + 0.72 * p;
+    r.armR.rotation.z = 0.18 - 0.72 * p;
+    r.head.rotation.x = 0.3 * p;
     return;
   }
   if (s.pose === "wave") {
@@ -970,6 +1027,15 @@ export class FestivalWorld {
   }
   private nearChild: number | null = null;
   private myMeal: THREE.Group | null = null;
+  /** The lotus moment: kneel at the water, set the lotus down, then pray. */
+  private lotusRite: {
+    start: number;
+    from: { x: number; z: number; h: number };
+    prop: THREE.Group;
+  } | null = null;
+  get placingLotus() {
+    return !!this.lotusRite;
+  }
   private coffeeSteam: THREE.Sprite | null = null;
   /** Sitting at the rice-ball table: sits down when the player starts eating. */
   private seat: {
@@ -1278,6 +1344,50 @@ export class FestivalWorld {
     return true;
   }
   private giftHeldUntil = -1;
+  private updateLotus(t: number) {
+    const r = this.lotusRite;
+    if (!r || !this.player) return false;
+    const e = t - r.start,
+      clamp = (x: number) => Math.min(1, Math.max(0, x)),
+      sm = (x: number) => x * x * (3 - 2 * x);
+    // 0–0.8 s step to the water's edge; 0.8–1.3 kneel; 1.4–2.3 lower the lotus onto the water;
+    // 2.3 it floats off; 2.6–3.2 palms together; pray until 6.2; stand and step back 6.2–7.
+    const w = sm(clamp(e / 0.8)) * (1 - sm(clamp((e - 6.4) / 0.6)));
+    this.pos = {
+      x: r.from.x + (POND_KNEEL.x - r.from.x) * w,
+      z: r.from.z + (POND_KNEEL.z - r.from.z) * w,
+    };
+    let dh = POND_KNEEL.heading - r.from.h;
+    dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    this.heading = r.from.h + dh * Math.min(1, w * 1.3);
+    const kneel = sm(clamp((e - 0.8) / 0.5)) * (1 - sm(clamp((e - 6.0) / 0.5)));
+    const lower = sm(clamp((e - 1.4) / 0.9));
+    const pray = sm(clamp((e - 2.6) / 0.6)) * (1 - sm(clamp((e - 5.8) / 0.5)));
+    // The held lotus goes down and forward with the hands, then is let go on the water.
+    r.prop.visible = e < 2.3;
+    r.prop.position.set(0, 0.86 - 0.62 * lower, 0.5 + 0.35 * lower);
+    this.player.root.position.set(this.pos.x, 0, this.pos.z);
+    this.player.root.rotation.y = this.heading;
+    animateRig(this.player, {
+      walking: (e < 0.8 && w < 0.98) || (e > 6.4 && e < 7),
+      pose: e < 2.45 ? "offer" : "pray",
+      kneel,
+      reach: e < 2.45 ? lower : pray,
+      t,
+      phase: 0,
+      calm: this.calm,
+    });
+    if (e >= 7) {
+      this.player.body.remove(r.prop);
+      this.lotusRite = null;
+      this.pos = isWalkable(r.from)
+        ? { x: r.from.x, z: r.from.z }
+        : { ...SPOTS.lotus };
+      this.lastSent.at = -1;
+      this.events.onMove({ ...this.pos }, this.heading);
+    }
+    return true;
+  }
   /** Seated at the table. Returns true while the player is sitting (any move key gets up). */
   private updateSeat(t: number, watching: boolean) {
     const s = this.seat;
@@ -1456,7 +1566,23 @@ export class FestivalWorld {
         home,
         phase: d.drift * 3,
       };
-      if (w.id === releaseId) {
+      if (w.id === releaseId && lotus && this.player) {
+        // Kneel at the edge, set it on the water from both hands (about 2.3 s), then pray.
+        const prop = makeLotus(w);
+        prop.scale.setScalar(0.32);
+        prop.position.set(0, 0.86, 0.5);
+        this.player.body.add(prop);
+        this.route = null;
+        this.keys.clear();
+        this.lotusRite = {
+          start: this.time,
+          from: { x: this.pos.x, z: this.pos.z, h: this.heading },
+          prop,
+        };
+        entry.release = { from: POND_WATER.clone(), start: this.time + 2.3 };
+        group.position.copy(POND_WATER);
+        group.visible = false;
+      } else if (w.id === releaseId) {
         const from = lotus
           ? new THREE.Vector3(SPOTS.lotus.x + 2.2, 0.06, SPOTS.lotus.z)
           : new THREE.Vector3(this.pos.x, 2.4, this.pos.z);
@@ -3495,6 +3621,28 @@ export class FestivalWorld {
       2.5,
       this.pos.z + Math.cos(yaw) * 6,
     );
+    // Lotus moment: a low side view of the player kneeling at the water's edge, with the
+    // lotus drifting out across the pond.
+    if (this.lotusRite) {
+      const e = this.time - this.lotusRite.start,
+        s = (x: number) => x * x * (3 - 2 * x),
+        f =
+          s(Math.min(1, Math.max(0, e / 0.9))) *
+          (1 - s(Math.min(1, Math.max(0, (e - 6.3) / 0.7))));
+      const cx = POND_KNEEL.x + 1.6,
+        cy = 2.0,
+        cz = POND_KNEEL.z - 4.4;
+      out.set(
+        out.x + (cx - out.x) * f,
+        out.y + (cy - out.y) * f,
+        out.z + (cz - out.z) * f,
+      );
+      target.set(
+        target.x + (POND_KNEEL.x + 1.6 - target.x) * f,
+        target.y + (0.7 - target.y) * f,
+        target.z + (POND_KNEEL.z + 0.3 - target.z) * f,
+      );
+    }
     // Eating together: a natural, slightly raised view across the table that frames the
     // player and both friends, easing in as the player sits down.
     if (this.seat) {
@@ -3608,6 +3756,7 @@ export class FestivalWorld {
     if (this.updateRite(t)) return;
     if (this.updateGift(t)) return;
     if (this.updateSeat(t, watching)) return;
+    if (this.updateLotus(t)) return;
     const k = this.keys;
     const turn =
       Number(k.has("ArrowLeft") || k.has("a")) -
@@ -3848,8 +3997,15 @@ export class FestivalWorld {
     for (const w of this.wishes.values()) {
       const g = w.group;
       if (w.release) {
-        const dur = w.kind === "lotus" ? 4.5 : 6;
+        const dur = w.kind === "lotus" ? 5.5 : 6;
         const p = (t - w.release.start) / dur;
+        if (p < 0) {
+          g.visible = false;
+          continue;
+        }
+        g.visible = true;
+        if (w.kind === "lotus")
+          g.scale.setScalar(0.32 + 0.68 * ease(Math.min(1, p * 1.6)));
         if (p >= 1) w.release = undefined;
         else {
           g.position.lerpVectors(w.release.from, w.home, ease(p));
