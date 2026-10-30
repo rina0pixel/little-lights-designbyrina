@@ -333,6 +333,19 @@ const fireworkTypes = [
   },
   { en: "Golden willow", mm: "ရွှေရောင်မိုးမခ", color: "#ffc58a", symbol: "❋" },
 ];
+/** Owner credit, kept small and quiet: page footer, welcome dialog and end-of-evening dialog. */
+const OWNER_URL = "https://designwithrina.com";
+function Credit({ lead }: { lead?: string }) {
+  return (
+    <span className="credit">
+      {lead ? lead + " " : ""}
+      <a href={OWNER_URL} target="_blank" rel="noopener noreferrer">
+        Design by Rina
+      </a>
+    </span>
+  );
+}
+
 export default function Home() {
   const [lang, L] = useState("en"),
     [name, N] = useState(""),
@@ -1174,7 +1187,10 @@ export default function Home() {
             "ရင်းနှီးမှုတွေ ပိုတိုးစေမယ့် အချိန်လေးများ။",
           )}
         </span>
-        <span>{t("Happy Thadingyut", "ပျော်ရွှင်ဖွယ် သီတင်းကျွတ်ပါ။")} ♡</span>
+        <span>
+          {t("Happy Thadingyut", "ပျော်ရွှင်ဖွယ် သီတင်းကျွတ်ပါ။")} ♡ ·{" "}
+          <Credit lead={"© " + new Date().getFullYear()} />
+        </span>
       </footer>
       {help && (
         <div className="help">
@@ -1278,6 +1294,8 @@ export default function Home() {
                     "You can add your name later, when you send a wish.",
                     "ဆုတောင်းပို့တဲ့အချိန်မှ နာမည်ထည့်လည်း ရပါတယ်။",
                   )}
+                  <br />
+                  <Credit lead={t("A little game by", "ဖန်တီးသူ —")} />
                 </small>
               </>
             ) : modal === "shop" ? (
@@ -1480,6 +1498,11 @@ export default function Home() {
                 <button className="change-balloon" onClick={() => M("")}>
                   {t("Keep wandering", "ဆက်လျှောက်လည်မယ်")} →
                 </button>
+                <small className="modal-foot">
+                  <Credit
+                    lead={t("Made with love by", "မေတ္တာဖြင့် ဖန်တီးသူ —")}
+                  />
+                </small>
               </>
             ) : (
               <>

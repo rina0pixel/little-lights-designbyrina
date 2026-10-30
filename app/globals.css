@@ -255,3 +255,8 @@ html[lang="my"] .modal h2{line-height:1.6}
 }
 .firework-status small{display:block;margin-top:4px;font-size:11px;opacity:.75;text-align:center}
 .scene.world .firework-status{background:#151a3c99;padding:8px 14px;border-radius:10px;text-align:center}
+
+/* Owner credit: quiet, but clearly there. */
+.credit a{color:inherit;text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;font-weight:600;letter-spacing:.2px}
+.credit a:hover{color:var(--orange)}
+.modal-foot .credit{display:inline-block;margin-top:8px}
