@@ -416,6 +416,7 @@ function makePerson(color: string, style: number, scale = 1): Rig {
 type RigState = {
   walking: boolean;
   pose: string;
+  holding?: boolean; // gift visible in the hands (give / receive poses)
   kneel?: number; // 0 standing → 1 kneeling
   reach?: number; // 0 arm down → 1 arm reaching forward with the taper
   t: number;
@@ -455,6 +456,31 @@ function animateRig(r: Rig, s: RigState) {
     return;
   }
   r.body.rotation.x = 0;
+  r.armL.rotation.z = -0.18;
+  r.armR.rotation.z = 0.18;
+  r.gift.position.set(0, -0.48, 0.04);
+  if (s.pose === "give") {
+    // Hold the gift out with the right hand.
+    const k = s.reach ?? 0;
+    r.armR.rotation.x = -0.25 - 1.15 * k;
+    r.armR.rotation.z = 0.18 - 0.12 * k;
+    r.gift.visible = !!s.holding;
+    r.head.rotation.x = 0.12 * k;
+    return;
+  }
+  if (s.pose === "receive") {
+    // Reach out with both hands, then hold the gift close.
+    const k = s.reach ?? 0;
+    r.armL.rotation.x = r.armR.rotation.x = -1.25 * k;
+    r.armL.rotation.z = -0.18 + 0.5 * k;
+    r.armR.rotation.z = 0.18 - 0.5 * k;
+    r.gift.visible = !!s.holding;
+    r.gift.position.set(-0.12, -0.5, 0.06);
+    if (s.holding && !s.calm)
+      r.body.position.y = Math.abs(Math.sin(t * 6)) * 0.05;
+    r.head.rotation.x = s.holding ? -0.1 : 0.1;
+    return;
+  }
   if (s.pose === "watching") {
     r.head.rotation.x = -0.5;
     r.armL.rotation.x = r.armR.rotation.x = -0.15;
@@ -880,6 +906,13 @@ export class FestivalWorld {
   private lit = false;
   private candles = false;
   private candleBits: THREE.Object3D[][] = [];
+  private giftRite: {
+    start: number;
+    from: { x: number; z: number; h: number };
+    to: { x: number; z: number };
+    thanked: boolean;
+    onThanks?: () => void;
+  } | null = null;
   private rite: {
     start: number;
     from: { x: number; z: number; h: number };
@@ -1059,6 +1092,85 @@ export class FestivalWorld {
       onDone,
     };
   }
+  /**
+   * The gift moment: the player steps up to the friend and holds out the gift (about 0.8 s),
+   * the friend reaches out with both hands and takes it (about 1.8 s), then says thank you and
+   * holds it close, happy. The player keeps standing near the friend afterwards.
+   */
+  giveGift(onThanks?: () => void) {
+    if (this.giftRite) return;
+    const f = FRIENDS.one,
+      dx = this.pos.x - f.x,
+      dz = this.pos.z - f.z,
+      len = Math.hypot(dx, dz) || 1;
+    let to = { x: f.x + (dx / len) * 1.15, z: f.z + (dz / len) * 1.15 };
+    if (!isWalkable(to)) to = { ...this.pos };
+    this.route = null;
+    this.keys.clear();
+    this.giftRite = {
+      start: this.time,
+      from: { x: this.pos.x, z: this.pos.z, h: this.heading },
+      to,
+      thanked: false,
+      onThanks,
+    };
+  }
+  get givingGift() {
+    return !!this.giftRite;
+  }
+  /** Gift moment timeline, seconds since start. */
+  private giftTimes(e: number) {
+    const clamp = (x: number) => Math.min(1, Math.max(0, x)),
+      sm = (x: number) => x * x * (3 - 2 * x);
+    return {
+      walk: sm(clamp(e / 0.8)),
+      give: sm(clamp((e - 0.7) / 0.6)) * (1 - sm(clamp((e - 2.0) / 0.5))),
+      giverHolds: e < 1.85,
+      receive: sm(clamp((e - 1.2) / 0.55)),
+      receiverHolds: e >= 1.85,
+      hug: sm(clamp((e - 2.1) / 0.5)), // gift drawn in close to the chest
+    };
+  }
+  private updateGift(t: number) {
+    const r = this.giftRite;
+    if (!r || !this.player) return false;
+    const e = t - r.start,
+      g = this.giftTimes(e);
+    this.pos = {
+      x: r.from.x + (r.to.x - r.from.x) * g.walk,
+      z: r.from.z + (r.to.z - r.from.z) * g.walk,
+    };
+    const want = Math.atan2(
+      FRIENDS.one.x - this.pos.x,
+      FRIENDS.one.z - this.pos.z,
+    );
+    let dh = want - r.from.h;
+    dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    this.heading = r.from.h + dh * Math.min(1, g.walk * 1.4);
+    if (!r.thanked && e >= 1.95) {
+      r.thanked = true;
+      r.onThanks?.();
+    }
+    this.player.root.position.set(this.pos.x, 0, this.pos.z);
+    this.player.root.rotation.y = this.heading;
+    animateRig(this.player, {
+      walking: g.walk > 0 && g.walk < 0.99,
+      pose: "give",
+      reach: g.give,
+      holding: g.giverHolds,
+      t,
+      phase: 0,
+      calm: this.calm,
+    });
+    if (e >= 3.8) {
+      this.giftRite = null;
+      this.giftHeldUntil = t + 3;
+      this.lastSent.at = -1;
+      this.events.onMove({ ...this.pos }, this.heading);
+    }
+    return true;
+  }
+  private giftHeldUntil = -1;
   get lightingCandles() {
     return !!this.rite;
   }
@@ -1151,10 +1263,14 @@ export class FestivalWorld {
           POND.z + Math.sin(a) * 4.3 * r,
         );
       } else {
+        // Float in the open sky just above and behind the pagoda, clear of the trees,
+        // so every wish balloon can be seen from the garden. Ones near the middle sit
+        // higher so they never hide behind the spire.
+        const x = (d.x - 50) * 0.45;
         home = new THREE.Vector3(
-          (d.x - 50) * 0.6,
-          6.5 + (30 - d.y) * 0.3,
-          -26 + d.sketch * 4 + d.drift,
+          PAGODA.x + x,
+          9.6 + ((d.y - 11) / 19) * 3.2 + Math.max(0, 2.6 - Math.abs(x) * 0.45),
+          PAGODA.z - 4 - d.sketch * 0.9 + d.drift * 0.3,
         );
       }
       const entry: {
@@ -3096,6 +3212,38 @@ export class FestivalWorld {
       2.5,
       this.pos.z + Math.cos(yaw) * 6,
     );
+    // Gift moment: a side view of the two friends so the hand-over and the thank-you are
+    // easy to see, easing in while the player walks up and back out at the end.
+    if (this.giftRite) {
+      const g = this.giftRite,
+        e = this.time - g.start,
+        s = (x: number) => x * x * (3 - 2 * x),
+        f =
+          s(Math.min(1, Math.max(0, e / 0.9))) *
+          (1 - s(Math.min(1, Math.max(0, (e - 3.1) / 0.7))));
+      const F = FRIENDS.one,
+        mx = (g.to.x + F.x) / 2,
+        mz = (g.to.z + F.z) / 2;
+      let nx = -(F.z - g.to.z),
+        nz = F.x - g.to.x;
+      const nl = Math.hypot(nx, nz) || 1;
+      nx /= nl;
+      nz /= nl;
+      // Look from the open garden side, not from the trees at the edge.
+      if (nx * (0 - mx) + nz * (8 - mz) < 0) ((nx = -nx), (nz = -nz));
+      const cx = mx + nx * 4.4,
+        cz = mz + nz * 4.4;
+      out.set(
+        out.x + (cx - out.x) * f,
+        out.y + (1.9 - out.y) * f,
+        out.z + (cz - out.z) * f,
+      );
+      target.set(
+        target.x + (mx - target.x) * f,
+        target.y + (1.05 - target.y) * f,
+        target.z + (mz - target.z) * f,
+      );
+    }
     // Candle moment: a close, low three-quarter view from the side so the kneel and the
     // first flame are easy to see, easing in and back out again.
     if (this.rite) {
@@ -3154,6 +3302,7 @@ export class FestivalWorld {
   };
   private updatePlayer(dt: number, t: number, watching: boolean) {
     if (this.updateRite(t)) return;
+    if (this.updateGift(t)) return;
     const k = this.keys;
     const turn =
       Number(k.has("ArrowLeft") || k.has("a")) -
@@ -3235,7 +3384,28 @@ export class FestivalWorld {
   }
   private updatePeople(dt: number, t: number, watching: boolean) {
     this.friends.forEach((f, i) => {
-      const happy = f.key === "friend-one" && this.friendHappy;
+      const one = f.key === "friend-one";
+      const gr = one ? this.giftRite : null;
+      const holding = one && !gr && t < this.giftHeldUntil && !watching;
+      if (gr || holding) {
+        // Receiving the gift: face the player, reach out with both hands, then hold it close.
+        f.rig.root.rotation.y = Math.atan2(
+          this.pos.x - f.rig.root.position.x,
+          this.pos.z - f.rig.root.position.z,
+        );
+        const g = gr ? this.giftTimes(t - gr.start) : null;
+        animateRig(f.rig, {
+          walking: false,
+          pose: "receive",
+          reach: g ? g.receive * (1 - g.hug * 0.35) : 0.65,
+          holding: g ? g.receiverHolds : true,
+          t,
+          phase: i * 1.3,
+          calm: this.calm,
+        });
+        return;
+      }
+      const happy = one && this.friendHappy;
       if (happy) {
         // Turn to face the player while receiving the gift.
         f.rig.root.rotation.y = Math.atan2(

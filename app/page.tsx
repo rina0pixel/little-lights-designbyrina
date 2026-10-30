@@ -355,6 +355,7 @@ export default function Home() {
     [pos, P] = useState<Position>(START),
     [lit, Li] = useState(false),
     [candles, C] = useState(false),
+    [thanks, SetThanks] = useState(false),
     [done, D] = useState<string[]>([]),
     [wish, Q] = useState(""),
     [wishes, Ws] = useState<Wish[]>([]),
@@ -691,17 +692,24 @@ export default function Home() {
       );
     }
     if (id === "gift") {
-      Po("giving");
-      T(
-        t(
-          "A sweet gift, and an even sweeter smile.",
-          "မုန့်လေးပေးပြီး ပျော်ရွှင်မှုတွေ ဝေမျှလိုက်ပြီ။",
-        ),
-      );
+      // Hand the gift over; the friend takes it and says thank you.
+      const thanked = () => {
+        SetThanks(true);
+        setTimeout(() => SetThanks(false), 4200);
+        complete("gift");
+        T(
+          t(
+            "A sweet gift, and an even sweeter smile.",
+            "မုန့်လေးပေးပြီး ပျော်ရွှင်မှုတွေ ဝေမျှလိုက်ပြီ။",
+          ),
+        );
+      };
+      const w = world.current;
+      if (!w) thanked();
+      else if (!w.givingGift) w.giveGift(thanked);
+      return;
     }
     complete(id);
-    if (id === "gift")
-      setTimeout(() => Po((p) => (p === "giving" ? "" : p)), 5000);
   }
   function openFireworks(arrived = false) {
     if (!started) {
@@ -965,7 +973,7 @@ export default function Home() {
                   {t("Wow, beautiful!", "အရမ်းလှတယ်။")}
                 </span>
               )}
-              {pose === "giving" && (
+              {thanks && (
                 <span className="bubble">
                   ♡ {t("Thank you!", "ကျေးဇူးပါ။")}
                 </span>
