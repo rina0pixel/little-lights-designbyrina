@@ -425,6 +425,10 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, ready]);
   const [nearChild, SetNearChild] = useState<number | null>(null);
+  // Buying flowers from the seller and offering them at the pagoda (day mode).
+  const [flowerPhase, SetFlowerPhase] = useState<string | null>(null);
+  const [flowerThanks, SetFlowerThanks] = useState(false);
+  const [flowerDone, SetFlowerDone] = useState(0);
   // A moment after a child greets the player, the player answers.
   const [reply, SetReply] = useState<number | null>(null);
   useEffect(() => {
@@ -642,6 +646,15 @@ export default function Home() {
         },
         onReady: () => SetReady(true),
         onChildNear: (i) => SetNearChild(i),
+        onFlowers: (phase) => {
+          if (phase === "thanks") {
+            SetFlowerThanks(true);
+            setTimeout(() => SetFlowerThanks(false), 1900);
+            return;
+          }
+          SetFlowerPhase(phase === "done" ? null : phase);
+          if (phase === "done") SetFlowerDone((n) => n + 1);
+        },
         onLeaveTable: () => SetEating(false),
       });
     } catch {
@@ -720,6 +733,16 @@ export default function Home() {
       then();
     });
   }
+  useEffect(() => {
+    if (flowerDone)
+      T(
+        t(
+          "Your flowers rest before the pagoda. May you be blessed.",
+          "ပန်းလေးတွေ ဘုရားရှေ့မှာ လှူဒါန်းပြီးပါပြီ။ ကောင်းချီးမင်္ဂလာ ရှိပါစေ။",
+        ),
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowerDone]);
   function act(id: string, arrived = false) {
     if (watching) return;
     if (!started) {
@@ -1053,6 +1076,32 @@ export default function Home() {
               </button>
             </div>
           ))}
+          {day && started && !watching && (
+            <div className="anchor person-anchor" data-anchor="seller">
+              <div className="label-stack">
+                {flowerPhase === "handover" && (
+                  <span className="bubble chat-bubble">
+                    {t("Here you are! 🌸", "ယူပါရှင်။ 🌸")}
+                  </span>
+                )}
+                {(flowerPhase === null ||
+                  flowerPhase === "carry" ||
+                  flowerPhase === "toPagoda") && (
+                  <button
+                    className="spot flower-spot near"
+                    onClick={() => world.current?.buyFlowers()}
+                  >
+                    <Flower2 size={18} />
+                    <span>
+                      {flowerPhase
+                        ? t("Offer the flowers", "ပန်းလှူမယ်")
+                        : t("Buy flowers", "ပန်းဝယ်မယ်")}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           <div className="anchor" data-anchor="spot-fireworks">
             <button
               className={"spot fireworks-spot " + (nearShop ? "near" : "")}
@@ -1129,6 +1178,11 @@ export default function Home() {
             <div className="anchor person-anchor" data-anchor="player">
               <div className="label-stack">
                 {chatLine("player")}
+                {flowerThanks && (
+                  <span className="bubble chat-bubble player-reply">
+                    {t("Thank you! ♡", "ကျေးဇူးပါ။ ♡")}
+                  </span>
+                )}
                 {reply !== null && nearChild === reply && !watching && (
                   <span className="bubble chat-bubble player-reply">
                     {t(CHILD_REPLIES[reply][0], CHILD_REPLIES[reply][1])}

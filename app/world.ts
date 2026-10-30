@@ -45,6 +45,8 @@ const WANDER = [
   { x: -9, z: -6 },
   { x: 10, z: 22 },
 ];
+/** Where the player kneels to lay flowers before the pagoda (centre front, outside its boundary). */
+const OFFER_SPOT = { x: PAGODA.x, z: PAGODA.z + 8.5 };
 /** Where the player kneels at the pond's west edge to set a lotus wish on the water. */
 const POND_KNEEL = {
   x: POND.x - POND.rx - 0.5,
@@ -64,6 +66,8 @@ type Events = {
   onReady?: () => void;
   /** The player got up from the rice-ball table by moving away. */
   onLeaveTable?: () => void;
+  /** Flower offering progress: "handover", "carry", "offer", "done". */
+  onFlowers?: (phase: string) => void;
   /** A child stopped to greet the player (index), or walked on (null). */
   onChildNear?: (index: number | null) => void;
 };
@@ -307,6 +311,59 @@ function longyiTexture(color: string) {
     );
   return stripeCache.get(color)!;
 }
+/** A hand-tied bouquet with no paper: a bundle of green stems, leaves and a dome of blooms. */
+function makeBouquet(seed = 0) {
+  const g = new THREE.Group();
+  const stem = std("#5f8f45");
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2;
+    const s = mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, 0.34, 4),
+      stem,
+      Math.cos(a) * 0.025,
+      0.17,
+      Math.sin(a) * 0.025,
+    );
+    s.rotation.z = Math.cos(a) * 0.12;
+    s.rotation.x = Math.sin(a) * 0.12;
+    g.add(s);
+  }
+  // A twist of string where the stems are tied.
+  g.add(
+    mesh(
+      new THREE.TorusGeometry(0.035, 0.008, 6, 12),
+      std("#e9d9a8"),
+      0,
+      0.14,
+      0,
+    ),
+  );
+  g.children[g.children.length - 1].rotation.x = Math.PI / 2;
+  const leaf = std("#4f7f3b", { side: THREE.DoubleSide });
+  for (let k = 0; k < 4; k++) {
+    const l = mesh(new THREE.CircleGeometry(0.05, 6), leaf, 0, 0.33, 0);
+    l.scale.set(0.7, 1.8, 1);
+    l.rotation.set(0.5, (k / 4) * Math.PI * 2, 0);
+    l.position.set(Math.cos(k * 1.6) * 0.07, 0.32, Math.sin(k * 1.6) * 0.07);
+    g.add(l);
+  }
+  const palette = ["#ef7fa6", "#fbfaf2", "#f4a23a", "#f6c94c", "#d9578a"];
+  for (let k = 0; k < 11; k++) {
+    const a = k * 2.39996 + seed,
+      r = k === 0 ? 0 : 0.035 + (k % 3) * 0.035;
+    g.add(
+      mesh(
+        new THREE.SphereGeometry(0.045 + (k % 2) * 0.012, 8, 6),
+        std(palette[(k + seed) % palette.length], { roughness: 0.75 }),
+        Math.cos(a) * r,
+        0.4 + (0.1 - r) * 0.5,
+        Math.sin(a) * r,
+      ),
+    );
+  }
+  return g;
+}
+
 function makePerson(color: string, style: number, scale = 1): Rig {
   const root = new THREE.Group(),
     body = new THREE.Group();
@@ -700,6 +757,23 @@ function animatePose(r: Rig, s: RigState) {
     r.armL.rotation.z = -0.18 + 0.72 * p;
     r.armR.rotation.z = 0.18 - 0.72 * p;
     r.head.rotation.x = 0.3 * p;
+    return;
+  }
+  if (s.pose === "carry") {
+    // Holding a bouquet in both hands in front of the chest.
+    r.armL.rotation.x = r.armR.rotation.x = -0.95;
+    r.armL.rotation.z = -0.18 + 0.42;
+    r.armR.rotation.z = 0.18 - 0.42;
+    r.head.rotation.x = 0.12;
+    return;
+  }
+  if (s.pose === "handover") {
+    // The seller holds the bouquet out with both hands.
+    const k = s.reach ?? 0;
+    r.armL.rotation.x = r.armR.rotation.x = -0.35 - 0.85 * k;
+    r.armL.rotation.z = -0.18 + 0.35 * k;
+    r.armR.rotation.z = 0.18 - 0.35 * k;
+    r.head.rotation.x = 0.1;
     return;
   }
   if (s.pose === "arrange") {
@@ -1166,6 +1240,62 @@ export class FestivalWorld {
   /** Day props for the parents' jobs: the flower stall and the swept leaves. */
   private dayProps: THREE.Object3D[] = [];
   private stallAt: Position = { x: 0, z: 0 };
+  /** Buying flowers and offering them at the pagoda (day mode). */
+  private flower: {
+    phase: "toSeller" | "handover" | "carry" | "toPagoda" | "offer";
+    start: number;
+    prop: THREE.Group;
+    from: { x: number; z: number; h: number };
+    thanked: boolean;
+  } | null = null;
+  private offerings = new THREE.Group();
+  private sellerProp: THREE.Group | null = null;
+  /** Where the seller's customer stands, and where offerings are made before the pagoda. */
+  private get sellerFront(): Position {
+    const p = this.parents[0];
+    return {
+      x: p.home.x + Math.sin(p.heading) * 1.3,
+      z: p.home.z + Math.cos(p.heading) * 1.3,
+    };
+  }
+  get flowerPhase() {
+    return this.flower?.phase ?? null;
+  }
+  /** Buy a bouquet (walk to the seller) or, when already carrying one, take it to the pagoda. */
+  buyFlowers() {
+    if (this.dayT < 0.5 || !this.player) return;
+    const f = this.flower;
+    if (f && (f.phase === "carry" || f.phase === "toPagoda"))
+      return this.offerFlowers();
+    if (f && f.phase !== "toSeller") return; // in the middle of a moment
+    if (!f)
+      this.flower = {
+        phase: "toSeller",
+        start: this.time,
+        prop: makeBouquet(3),
+        from: { x: 0, z: 0, h: 0 },
+        thanked: false,
+      };
+    const p = this.parents[0];
+    this.walkTo(this.sellerFront, p.heading + Math.PI, () => {
+      if (!this.flower) return;
+      this.flower.phase = "handover";
+      this.flower.start = this.time;
+      this.events.onFlowers?.("handover");
+    });
+  }
+  offerFlowers() {
+    const f = this.flower;
+    if (!f || (f.phase !== "carry" && f.phase !== "toPagoda")) return;
+    f.phase = "toPagoda";
+    this.walkTo(OFFER_SPOT, Math.PI, () => {
+      if (!this.flower) return;
+      this.flower.phase = "offer";
+      this.flower.start = this.time;
+      this.flower.from = { x: this.pos.x, z: this.pos.z, h: this.heading };
+      this.events.onFlowers?.("offer");
+    });
+  }
   private homage: ({ start: number } | null)[] = [];
   private lastSeg: number[] = [];
   private myMeal: THREE.Group | null = null;
@@ -1606,6 +1736,89 @@ export class FestivalWorld {
     return true;
   }
   private giftHeldUntil = -1;
+  /** Handover at the stall and the offering at the pagoda take over the player; carrying doesn't. */
+  private updateFlowerMoment(t: number) {
+    const f = this.flower;
+    if (!f || !this.player || (f.phase !== "handover" && f.phase !== "offer"))
+      return false;
+    if (this.dayT < 0.5) {
+      // Switched to night mid-way: quietly drop the moment.
+      this.player.body.remove(f.prop);
+      this.flower = null;
+      if (this.sellerProp) this.sellerProp.visible = false;
+      return false;
+    }
+    const e = t - f.start,
+      clamp = (x: number) => Math.min(1, Math.max(0, x)),
+      sm = (x: number) => x * x * (3 - 2 * x);
+    this.player.root.position.set(this.pos.x, 0, this.pos.z);
+    if (f.phase === "handover") {
+      // 0–0.6 reach out; the bouquet passes over at 1.05 s; then it's held close.
+      const p = this.parents[0];
+      this.heading = Math.atan2(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+      this.player.root.rotation.y = this.heading;
+      if (e >= 1.05 && !f.prop.parent) {
+        f.prop.position.set(0, 0.86, 0.42);
+        this.player.body.add(f.prop);
+      }
+      if (e >= 1.3 && !f.thanked) {
+        f.thanked = true;
+        this.events.onFlowers?.("thanks");
+      }
+      animateRig(this.player, {
+        walking: false,
+        pose: e < 1.05 ? "handover" : "carry",
+        reach: sm(clamp((e - 0.3) / 0.5)),
+        t,
+        phase: 0,
+        calm: this.calm,
+      });
+      if (e >= 2.0) {
+        f.phase = "carry";
+        this.events.onFlowers?.("carry");
+        this.offerFlowers(); // straight on to the pagoda
+      }
+      return true;
+    }
+    // Offering: kneel (0–0.5), lay the bouquet down on the pagoda ground (0.6–1.5),
+    // pray with palms together (1.7–4.2), stand (4.2–4.7).
+    this.player.root.rotation.y = this.heading;
+    const kneel = sm(clamp(e / 0.5)) * (1 - sm(clamp((e - 4.2) / 0.5)));
+    const lower = sm(clamp((e - 0.6) / 0.9));
+    const pray = sm(clamp((e - 1.7) / 0.5)) * (1 - sm(clamp((e - 3.9) / 0.4)));
+    if (e < 1.5)
+      f.prop.position.set(0, 0.86 - 0.66 * lower, 0.42 + 0.45 * lower);
+    else if (f.prop.parent === this.player.body) {
+      // Let go: the bouquet stays on the ground in front of the pagoda.
+      this.player.body.remove(f.prop);
+      const n = this.offerings.children.length;
+      const a = ((n % 7) - 3) * 0.06;
+      f.prop.position.set(
+        PAGODA.x + Math.sin(a) * 7.62,
+        0.02,
+        PAGODA.z + Math.cos(a) * 7.62,
+      );
+      f.prop.rotation.set(Math.PI / 2 - 0.15, 0, (n % 3) * 0.4 - 0.4);
+      this.offerings.add(f.prop);
+      while (this.offerings.children.length > 9)
+        this.offerings.remove(this.offerings.children[0]);
+    }
+    animateRig(this.player, {
+      walking: false,
+      pose: e < 1.6 ? "offer" : "pray",
+      kneel,
+      reach: e < 1.6 ? lower : pray,
+      t,
+      phase: 0,
+      calm: this.calm,
+    });
+    if (e >= 4.8) {
+      this.flower = null;
+      this.lastSent.at = -1;
+      this.events.onFlowers?.("done");
+    }
+    return true;
+  }
   private updateLotus(t: number) {
     const r = this.lotusRite;
     if (!r || !this.player) return false;
@@ -3844,7 +4057,17 @@ export class FestivalWorld {
         until: 4 + i * 3,
         walking: false,
       });
-      if (i === 0) this.buildFlowerStall(ppos, Math.atan2(-ux, -uz));
+      if (i === 0) {
+        this.buildFlowerStall(ppos, Math.atan2(-ux, -uz));
+        const sp = makeBouquet(1);
+        sp.position.set(-0.1, -0.5, 0.12);
+        sp.visible = false;
+        parent.armR.add(sp);
+        this.sellerProp = sp;
+        this.offerings.visible = false;
+        this.scene.add(this.offerings);
+        this.dayProps.push(this.offerings);
+      }
       if (i === 2) this.buildSweeping(parent, ppos, Math.atan2(-ux, -uz));
       this.homage.push(null);
       this.lastSeg.push(i % route.length);
@@ -3893,34 +4116,29 @@ export class FestivalWorld {
           z,
         ),
       );
-    const blooms: [string, number][] = [
-      ["#fbfaf2", -0.4],
-      ["#f4a23a", 0],
-      ["#ef7fa6", 0.4],
-    ];
-    for (const [color, x] of blooms) {
-      g.add(
-        mesh(
-          new THREE.CylinderGeometry(0.15, 0.12, 0.22, 12),
-          std("#7c8fa3"),
-          x,
-          0.77,
-          0,
-        ),
-      );
-      const mat = std(color, { roughness: 0.7 });
-      for (let k = 0; k < 7; k++) {
-        const a = (k / 7) * Math.PI * 2;
-        g.add(
-          mesh(
-            new THREE.SphereGeometry(0.06, 8, 6),
-            mat,
-            x + Math.cos(a) * 0.08 * (k % 2 ? 1 : 0.4),
-            0.93 + (k % 3) * 0.03,
-            Math.sin(a) * 0.08 * (k % 2 ? 1 : 0.4),
-          ),
-        );
-      }
+    // Unwrapped bouquets lying ready on the stall, plus a few standing in a low tray.
+    for (let k = 0; k < 4; k++) {
+      const b = makeBouquet(k);
+      b.rotation.z = Math.PI / 2;
+      b.rotation.y = 0.15 * (k - 1.5);
+      b.position.set(-0.45 + k * 0.3, 0.7, 0.08);
+      b.scale.setScalar(1.1);
+      g.add(b);
+    }
+    g.add(
+      mesh(
+        new THREE.BoxGeometry(0.5, 0.06, 0.22),
+        std("#8a6a48"),
+        0.35,
+        0.69,
+        -0.16,
+      ),
+    );
+    for (let k = 0; k < 3; k++) {
+      const b = makeBouquet(k + 2);
+      b.position.set(0.2 + k * 0.15, 0.68, -0.16);
+      b.rotation.z = (k - 1) * 0.15;
+      g.add(b);
     }
     // Strings of jasmine hanging from a small rail.
     g.add(mesh(new THREE.BoxGeometry(1.3, 0.03, 0.03), dark, 0, 1.3, -0.28));
@@ -4028,13 +4246,23 @@ export class FestivalWorld {
       const h = this.homage[i],
         c = this.children[i];
       let pose = "",
-        face = p.heading;
+        face = p.heading,
+        reachSeller = 0;
       p.walking = false;
       if (h) {
         face = Math.atan2(c.pos.x - p.pos.x, c.pos.z - p.pos.z);
         pose = t - h.start > 0.6 ? "happy" : "";
       } else if (watching) {
         pose = "watching";
+      } else if (i === 0 && this.flower?.phase === "handover") {
+        // Handing the bouquet to the player.
+        const e = t - this.flower.start;
+        face = Math.atan2(this.pos.x - p.pos.x, this.pos.z - p.pos.z);
+        pose = "handover";
+        reachSeller =
+          Math.min(1, Math.max(0, e / 0.6)) *
+          (e < 1.4 ? 1 : Math.max(0, 1 - (e - 1.4) / 0.4));
+        if (this.sellerProp) this.sellerProp.visible = e < 1.05;
       } else if (i === 0) {
         // Flower seller: arranging blooms at the stall beside them.
         face = Math.atan2(this.stallAt.x - p.pos.x, this.stallAt.z - p.pos.z);
@@ -4084,6 +4312,7 @@ export class FestivalWorld {
       animateRig(p.rig, {
         walking: p.walking,
         pose,
+        reach: reachSeller,
         t,
         phase: i * 2.1,
         calm: this.calm,
@@ -4298,6 +4527,27 @@ export class FestivalWorld {
       2.5,
       this.pos.z + Math.cos(yaw) * 6,
     );
+    // Flower offering: a low side view of the player kneeling before the pagoda.
+    if (this.flower && this.flower.phase === "offer") {
+      const e = this.time - this.flower.start,
+        s = (x: number) => x * x * (3 - 2 * x),
+        f =
+          s(Math.min(1, Math.max(0, e / 0.8))) *
+          (1 - s(Math.min(1, Math.max(0, (e - 4.2) / 0.6))));
+      const cx = OFFER_SPOT.x + 3.5,
+        cy = 1.9,
+        cz = OFFER_SPOT.z - 1.0;
+      out.set(
+        out.x + (cx - out.x) * f,
+        out.y + (cy - out.y) * f,
+        out.z + (cz - out.z) * f,
+      );
+      target.set(
+        target.x + (OFFER_SPOT.x - target.x) * f,
+        target.y + (0.75 - target.y) * f,
+        target.z + (OFFER_SPOT.z - 0.3 - target.z) * f,
+      );
+    }
     // Lotus moment: a low side view of the player kneeling at the water's edge, with the
     // lotus drifting out across the pond.
     if (this.lotusRite) {
@@ -4435,7 +4685,8 @@ export class FestivalWorld {
       this.updateRite(t) ||
       this.updateGift(t) ||
       this.updateSeat(t, watching) ||
-      this.updateLotus(t)
+      this.updateLotus(t) ||
+      this.updateFlowerMoment(t)
     ) {
       this.faceOffset = 0; // special moments always face the way they were designed
       return;
@@ -4520,9 +4771,12 @@ export class FestivalWorld {
     this.faceOffset += (wantFace - this.faceOffset) * Math.min(1, dt * 9);
     this.player.root.position.set(this.pos.x, 0, this.pos.z);
     this.player.root.rotation.y = this.heading + this.faceOffset;
+    const carrying =
+      this.flower &&
+      (this.flower.phase === "carry" || this.flower.phase === "toPagoda");
     animateRig(this.player, {
       walking: this.walking && (move !== 0 || autoStep),
-      pose: watching ? "watching" : this.pose,
+      pose: watching ? "watching" : carrying ? "carry" : this.pose,
       t,
       phase: 0,
       calm: this.calm,
@@ -4961,6 +5215,10 @@ export class FestivalWorld {
       const f = this.friends.find((f) => f.key === key);
       if (!f) return false;
       out.copy(f.rig.root.position).setY(2.15);
+    } else if (key === "seller") {
+      const p = this.parents[0];
+      if (!p || this.dayT < 0.5) return false;
+      out.set(p.pos.x, 2.15, p.pos.z);
     } else if (key.startsWith("child-")) {
       const c = this.children[Number(key.slice(6))];
       if (!c) return false;
