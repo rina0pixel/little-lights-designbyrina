@@ -776,10 +776,42 @@ function makeLotus(w: WorldWish) {
 }
 
 /* ---------- fireworks ---------- */
+/**
+ * The fireworks show, timed to the recorded sound (public/sounds/fireworks.mp3). The sound starts
+ * FIREWORK_AUDIO_AT seconds after launch so the first rocket can be seen rising; every burst below
+ * lands on a boom in the recording (onset time in the file + FIREWORK_AUDIO_AT).
+ *   off/h: sideways offset and height above the pagoda, size: spread and brightness,
+ *   rocket: false for the small crackles that sparkle without a rising rocket.
+ */
+export const FIREWORK_AUDIO_AT = 0.45;
+export const FIREWORK_SHOW_SECONDS = 6.5;
+const SHOW: {
+  at: number;
+  off: number;
+  h: number;
+  z: number;
+  size: number;
+  rocket: boolean;
+}[] = [
+  // First wave: three booms.
+  { at: 0.305, off: -8, h: 15.5, z: 0.4, size: 1, rocket: true },
+  { at: 0.81, off: 8.5, h: 18.5, z: 1.4, size: 1, rocket: true },
+  { at: 1.105, off: 0, h: 13.5, z: 2.4, size: 0.95, rocket: true },
+  { at: 1.23, off: 2.5, h: 15, z: 2.2, size: 0.35, rocket: false }, // crackle
+  // Second wave: a quick double, then the finale.
+  { at: 2.05, off: -5, h: 19.5, z: 0.8, size: 0.85, rocket: true },
+  { at: 2.18, off: 5.5, h: 15.5, z: 1.8, size: 0.8, rocket: true },
+  { at: 2.57, off: 0, h: 17.5, z: 2.8, size: 1.2, rocket: true },
+  { at: 2.725, off: 7.5, h: 17.5, z: 2.6, size: 0.35, rocket: false }, // crackle
+  // A soft, faraway pop low on the horizon.
+  { at: 3.625, off: -13, h: 10, z: -6, size: 0.4, rocket: false },
+];
 type Burst = {
   pos: THREE.Vector3;
   from: THREE.Vector3;
   delay: number;
+  size: number;
+  hasRocket: boolean;
   dirs: THREE.Vector3[];
   speeds: number[];
   points: THREE.Points;
@@ -1081,7 +1113,9 @@ export class FestivalWorld {
     if (e >= 5.4) {
       this.rite = null;
       // Always finish on walkable ground so the player can move away.
-      this.pos = isWalkable(r.from) ? { x: r.from.x, z: r.from.z } : { x: KNEEL.x, z: KNEEL.z + 2.2 };
+      this.pos = isWalkable(r.from)
+        ? { x: r.from.x, z: r.from.z }
+        : { x: KNEEL.x, z: KNEEL.z + 2.2 };
       this.candles = true;
       this.candleLight.intensity = 120;
       for (const b of this.candleBits) for (const o of b) o.visible = true;
@@ -1192,16 +1226,15 @@ export class FestivalWorld {
     const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
     const centre = pagoda.clone().addScaledVector(fwd, 4);
     this.skyLook.copy(centre).setY(17);
-    const n = type === 2 ? 64 : 44;
     const spread = narrow ? 0.55 : 1;
-    [
-      [-9, 16, 0.6],
-      [8.5, 19, 1.6],
-      [0, 13.5, 2.6],
-    ].forEach(([off, h, delay], b) => {
+    SHOW.forEach((shot, b) => {
+      const { off, h, size } = shot,
+        delay = FIREWORK_AUDIO_AT + shot.at,
+        n = Math.round((type === 2 ? 64 : 44) * (size < 0.5 ? 0.45 : 1));
       const pos = centre
         .clone()
         .addScaledVector(side, off * spread)
+        .addScaledVector(fwd, -shot.z)
         .setY(h);
       const from = centre
         .clone()
@@ -1217,7 +1250,10 @@ export class FestivalWorld {
           a = i * 2.39996;
         dirs.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
         speeds.push(
-          (i % 2 ? 6.8 : 10.5) * (type === 1 ? 0.85 : 1) * (narrow ? 0.8 : 1),
+          (i % 2 ? 6.8 : 10.5) *
+            (type === 1 ? 0.85 : 1) *
+            (narrow ? 0.8 : 1) *
+            size,
         );
       }
       const colors = new Float32Array(n * 3),
@@ -1289,13 +1325,13 @@ export class FestivalWorld {
         );
         this.scene.add(stars);
       }
-      const color = type === 3 ? RAINBOW[b + 1] : FIREWORK_COLORS[type];
+      const color =
+        type === 3 ? RAINBOW[(b + 1) % RAINBOW.length] : FIREWORK_COLORS[type];
       const rocket = glow(color, 1.2, 0);
-      const flash = glow(color, 16, 0);
+      const flash = glow(color, 16 * Math.max(0.4, size), 0);
       flash.position.copy(pos);
-      const light = this.fireLights[b];
-      light.color.set(color);
-      light.position.copy(pos);
+      // A few shared lights; each frame the brightest bursts claim them (see updateFireworks).
+      const light = this.fireLights[b % this.fireLights.length];
       const reflection = mesh(
         new THREE.CircleGeometry(1, 32),
         new THREE.MeshBasicMaterial({
@@ -1306,7 +1342,7 @@ export class FestivalWorld {
           depthWrite: false,
           blending: THREE.AdditiveBlending,
         }),
-        POND.x + (b - 1) * 2.5,
+        POND.x + ((b % 3) - 1) * 2.5,
         0.08,
         POND.z - 0.5,
       );
@@ -1320,6 +1356,8 @@ export class FestivalWorld {
         pos,
         from,
         delay,
+        size,
+        hasRocket: shot.rocket,
         dirs,
         speeds,
         points,
@@ -3098,7 +3136,8 @@ export class FestivalWorld {
     this.camDt = Math.min(raw, 0.25);
     const t = this.time;
     if (!this.visible) return;
-    const watching = this.fireworkStart >= 0 && t - this.fireworkStart < 6;
+    const watching =
+      this.fireworkStart >= 0 && t - this.fireworkStart < FIREWORK_SHOW_SECONDS;
     this.updatePlayer(dt, t, watching);
     this.updatePeople(dt, t, watching);
     this.updateWishes(t);
@@ -3313,16 +3352,17 @@ export class FestivalWorld {
   private updateFireworks(t: number) {
     if (this.fireworkStart < 0) return;
     const e = t - this.fireworkStart;
-    if (e > 6.2) {
+    if (e > FIREWORK_SHOW_SECONDS + 0.2) {
       this.clearFireworks();
       this.fireworkStart = -1;
       return;
     }
     const type = this.fireworkType;
     const gravity = type === 4 ? 4.2 : 1.1;
+    for (const l of this.fireLights) l.intensity = 0;
     for (const b of this.bursts) {
       const rt = (e - (b.delay - 0.6)) / 0.6;
-      const rocketOn = rt > 0 && rt < 1;
+      const rocketOn = b.hasRocket && rt > 0 && rt < 1;
       (b.rocket.material as THREE.SpriteMaterial).opacity = rocketOn ? 1 : 0;
       if (rocketOn) b.rocket.position.lerpVectors(b.from, b.pos, ease(rt));
       const s = e - b.delay;
@@ -3335,14 +3375,23 @@ export class FestivalWorld {
         s < 0.1
           ? s / 0.1
           : Math.max(0, 1 - Math.pow((s - 0.1) / (life - 0.1), 1.4));
-      (b.points.material as THREE.PointsMaterial).opacity = fade;
-      (b.lines.material as THREE.LineBasicMaterial).opacity = fade * 0.9;
+      const bright = Math.min(1, 0.35 + b.size * 0.65);
+      (b.points.material as THREE.PointsMaterial).opacity = fade * bright;
+      (b.lines.material as THREE.LineBasicMaterial).opacity =
+        fade * 0.9 * bright;
       if (b.stars) (b.stars.material as THREE.PointsMaterial).opacity = fade;
       (b.flash.material as THREE.SpriteMaterial).opacity =
-        Math.max(0, 1 - s / 0.45) * 0.9;
-      b.light.intensity = Math.max(0, 1 - s / 1.6) * 650;
+        Math.max(0, 1 - s / 0.45) * 0.9 * bright;
+      const glowNow = Math.max(0, 1 - s / 1.6) * 650 * b.size;
+      if (glowNow > b.light.intensity) {
+        b.light.intensity = glowNow;
+        b.light.color.copy((b.flash.material as THREE.SpriteMaterial).color);
+        b.light.position.copy(b.pos);
+      }
       (b.reflection.material as THREE.MeshBasicMaterial).opacity =
-        s < 0.4 ? (s / 0.4) * 0.85 : Math.max(0, 0.85 * (1 - (s - 0.4) / 2.9));
+        (s < 0.4
+          ? (s / 0.4) * 0.85
+          : Math.max(0, 0.85 * (1 - (s - 0.4) / 2.9))) * Math.min(1, b.size);
       const spread = 1 - Math.pow(1 - Math.min(s / 1.3, 1), 3);
       const fall = gravity * s * s * 0.5;
       const trail = type === 4 ? 2.6 : 1.1;
@@ -3422,7 +3471,7 @@ export class FestivalWorld {
     if (watching && this.cine && !this.cine.skipped) {
       // Wide festival shot with a very slow push in.
       const c = this.cine;
-      const prog = Math.min(1, (this.time - c.start) / 6);
+      const prog = Math.min(1, (this.time - c.start) / FIREWORK_SHOW_SECONDS);
       p.copy(c.pos)
         .addScaledVector(c.dir, -3 * prog)
         .setY(c.pos.y + 0.6 * prog);

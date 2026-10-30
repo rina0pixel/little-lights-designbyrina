@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { isNearTable, isNearSpot, START, type Position } from "./movement";
-import { FestivalWorld } from "./world";
+import { FIREWORK_SHOW_SECONDS, FestivalWorld } from "./world";
 import { Ambience } from "./ambience";
 import { moderate } from "./api/wishes/moderation";
 import {
@@ -445,7 +445,10 @@ export default function Home() {
   }, [mm]);
   useEffect(() => {
     if (firework === null) return;
-    const timer = setTimeout(() => SetFirework(null), 6000);
+    const timer = setTimeout(
+      () => SetFirework(null),
+      FIREWORK_SHOW_SECONDS * 1000,
+    );
     return () => clearTimeout(timer);
   }, [firework]);
   function launchFirework() {
