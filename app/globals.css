@@ -272,3 +272,8 @@ html[lang="my"] .modal h2{line-height:1.6}
 
 /* Eating together: fade the spot markers and edge pointers so the table scene stays clear. */
 .scene.eating-together [data-anchor^="spot-"],.scene.eating-together [data-edge]{opacity:0;pointer-events:none;transition:opacity .4s}
+
+/* The player's reply to a child: same soft bubble, in the warm cream of the name tag. */
+.person-anchor .player-reply{background:#fff7de;border-color:#ecd9a6}
+.person-anchor .player-reply::after{border-color:#ecd9a6}
+.person-anchor .player-reply{margin-bottom:34px}

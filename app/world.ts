@@ -623,6 +623,7 @@ function animatePose(r: Rig, s: RigState) {
     return;
   }
   r.body.rotation.x = 0;
+  r.body.rotation.y = 0;
   r.armL.rotation.z = -0.18;
   r.armR.rotation.z = 0.18;
   r.gift.position.set(0, -0.48, 0.04);
@@ -699,6 +700,29 @@ function animatePose(r: Rig, s: RigState) {
     r.armL.rotation.z = -0.18 + 0.72 * p;
     r.armR.rotation.z = 0.18 - 0.72 * p;
     r.head.rotation.x = 0.3 * p;
+    return;
+  }
+  if (s.pose === "arrange") {
+    // Arranging flowers at the stall: hands busy in front, head bent to the work.
+    r.armL.rotation.x = -0.9 + Math.sin(t * 1.7) * 0.15;
+    r.armR.rotation.x = -1.0 - Math.max(0, Math.sin(t * 2.3)) * 0.35;
+    r.armL.rotation.z = -0.18 + 0.25;
+    r.armR.rotation.z = 0.18 - 0.25;
+    r.head.rotation.x = 0.28;
+    r.head.rotation.y = Math.sin(t * 0.4) * 0.25;
+    r.body.rotation.x = 0.08;
+    return;
+  }
+  if (s.pose === "sweep") {
+    // Sweeping with a long broom: lean forward, both hands low, swinging side to side.
+    const sw = s.calm ? 0 : Math.sin(t * 3.2);
+    r.body.rotation.x = 0.18;
+    r.body.rotation.y = sw * 0.2;
+    r.armL.rotation.x = -0.75;
+    r.armR.rotation.x = -0.55;
+    r.armL.rotation.z = -0.18 + 0.35 + sw * 0.12;
+    r.armR.rotation.z = 0.18 - 0.1 + sw * 0.12;
+    r.head.rotation.x = 0.3;
     return;
   }
   if (s.pose === "wave") {
@@ -1118,6 +1142,7 @@ export class FestivalWorld {
     this.speaker = key;
   }
   private nearChild: number | null = null;
+  private faceOffset = 0;
   /* Day-only people (hidden at night, when the night scene stays exactly as it was). */
   private worshippers: {
     rig: Rig;
@@ -1129,7 +1154,18 @@ export class FestivalWorld {
     start: number;
     spot: number;
   }[] = [];
-  private parents: { rig: Rig; pos: Position; heading: number }[] = [];
+  private parents: {
+    rig: Rig;
+    pos: Position;
+    heading: number;
+    home: Position;
+    path: Position[];
+    until: number;
+    walking: boolean;
+  }[] = [];
+  /** Day props for the parents' jobs: the flower stall and the swept leaves. */
+  private dayProps: THREE.Object3D[] = [];
+  private stallAt: Position = { x: 0, z: 0 };
   private homage: ({ start: number } | null)[] = [];
   private lastSeg: number[] = [];
   private myMeal: THREE.Group | null = null;
@@ -3801,9 +3837,15 @@ export class FestivalWorld {
       this.scene.add(parent.root);
       this.parents.push({
         rig: parent,
-        pos: ppos,
+        pos: { ...ppos },
         heading: Math.atan2(-ux, -uz),
+        home: { ...ppos },
+        path: [],
+        until: 4 + i * 3,
+        walking: false,
       });
+      if (i === 0) this.buildFlowerStall(ppos, Math.atan2(-ux, -uz));
+      if (i === 2) this.buildSweeping(parent, ppos, Math.atan2(-ux, -uz));
       this.homage.push(null);
       this.lastSeg.push(i % route.length);
     });
@@ -3825,28 +3867,226 @@ export class FestivalWorld {
       });
     });
   }
+  /** Parent 0 sells flowers: a little wooden stall with buckets of jasmine, marigolds and roses. */
+  private buildFlowerStall(at: Position, heading: number) {
+    const g = new THREE.Group();
+    // Stand the stall to the seller's right, so it never sits between them and their child.
+    const rx = Math.cos(heading),
+      rz = -Math.sin(heading);
+    g.position.set(at.x + rx * 1.05, 0, at.z + rz * 1.05);
+    g.rotation.y = heading;
+    const wood = std("#a8754a"),
+      dark = std("#6e4a30");
+    g.add(mesh(new THREE.BoxGeometry(1.3, 0.08, 0.6), wood, 0, 0.62, 0));
+    for (const [x, z] of [
+      [-0.58, -0.24],
+      [0.58, -0.24],
+      [-0.58, 0.24],
+      [0.58, 0.24],
+    ])
+      g.add(
+        mesh(
+          new THREE.CylinderGeometry(0.035, 0.035, 0.62, 6),
+          dark,
+          x,
+          0.31,
+          z,
+        ),
+      );
+    const blooms: [string, number][] = [
+      ["#fbfaf2", -0.4],
+      ["#f4a23a", 0],
+      ["#ef7fa6", 0.4],
+    ];
+    for (const [color, x] of blooms) {
+      g.add(
+        mesh(
+          new THREE.CylinderGeometry(0.15, 0.12, 0.22, 12),
+          std("#7c8fa3"),
+          x,
+          0.77,
+          0,
+        ),
+      );
+      const mat = std(color, { roughness: 0.7 });
+      for (let k = 0; k < 7; k++) {
+        const a = (k / 7) * Math.PI * 2;
+        g.add(
+          mesh(
+            new THREE.SphereGeometry(0.06, 8, 6),
+            mat,
+            x + Math.cos(a) * 0.08 * (k % 2 ? 1 : 0.4),
+            0.93 + (k % 3) * 0.03,
+            Math.sin(a) * 0.08 * (k % 2 ? 1 : 0.4),
+          ),
+        );
+      }
+    }
+    // Strings of jasmine hanging from a small rail.
+    g.add(mesh(new THREE.BoxGeometry(1.3, 0.03, 0.03), dark, 0, 1.3, -0.28));
+    for (const x of [-0.5, -0.2, 0.2, 0.5]) {
+      g.add(
+        mesh(
+          new THREE.CylinderGeometry(0.02, 0.02, 0.62, 4),
+          dark,
+          x,
+          0.99,
+          -0.28,
+        ),
+      );
+      g.add(
+        mesh(
+          new THREE.TorusGeometry(0.07, 0.025, 6, 12),
+          std("#fbfaf2"),
+          x,
+          0.72,
+          -0.28,
+        ),
+      );
+    }
+    g.visible = false;
+    this.scene.add(g);
+    this.dayProps.push(g);
+    this.stallAt = { x: g.position.x, z: g.position.z };
+  }
+  /** Parent 2 sweeps dry leaves near the pagoda: a broom in hand and leaves on the ground. */
+  private buildSweeping(rig: Rig, at: Position, heading: number) {
+    const broom = new THREE.Group();
+    broom.add(
+      mesh(
+        new THREE.CylinderGeometry(0.025, 0.025, 1.3, 6),
+        std("#b88a55"),
+        0,
+        -0.55,
+        0.05,
+      ),
+    );
+    const head = mesh(
+      new THREE.ConeGeometry(0.16, 0.38, 10),
+      std("#d8c48a"),
+      0,
+      -1.25,
+      0.05,
+    );
+    head.rotation.x = Math.PI;
+    broom.add(head);
+    broom.position.set(-0.12, -0.4, 0.12);
+    broom.rotation.x = 0.55;
+    rig.armR.add(broom);
+    const leaves = new THREE.Group();
+    const cols = ["#b5752d", "#c99a3b", "#8f5a2a", "#d2a85a"];
+    for (let k = 0; k < 34; k++) {
+      const a = (k / 34) * Math.PI * 2 * 3.3,
+        r = 0.6 + ((k * 37) % 23) / 10;
+      const leaf = mesh(
+        new THREE.CircleGeometry(0.09, 5),
+        new THREE.MeshStandardMaterial({
+          color: cols[k % 4],
+          side: THREE.DoubleSide,
+        }),
+        Math.cos(a) * r,
+        0.035,
+        Math.sin(a) * r,
+      );
+      leaf.rotation.set(-Math.PI / 2, 0, a);
+      leaf.scale.set(1, 1.6, 1);
+      leaves.add(leaf);
+    }
+    const fx = Math.sin(heading + 1.2),
+      fz = Math.cos(heading + 1.2);
+    for (let k = 0; k < 16; k++) {
+      const leaf = mesh(
+        new THREE.CircleGeometry(0.09, 5),
+        new THREE.MeshStandardMaterial({
+          color: cols[k % 4],
+          side: THREE.DoubleSide,
+        }),
+        fx * 1.6 + Math.cos(k * 2.4) * 0.22,
+        0.04 + (k % 4) * 0.025,
+        fz * 1.6 + Math.sin(k * 2.4) * 0.22,
+      );
+      leaf.rotation.set(-Math.PI / 2 + (k % 3) * 0.3, 0, k);
+      leaf.scale.set(1, 1.6, 1);
+      leaves.add(leaf);
+    }
+    leaves.position.set(at.x, 0, at.z);
+    leaves.visible = false;
+    this.scene.add(leaves);
+    this.dayProps.push(leaves);
+  }
   /** Day-only life: worshippers at the pagoda, and children paying respect to their parents. */
   private updateDayPeople(dt: number, t: number, watching: boolean) {
     const show = this.dayT > 0.5;
     for (const w of this.worshippers) w.rig.root.visible = show;
     for (const p of this.parents) p.rig.root.visible = show;
+    for (const g of this.dayProps) g.visible = show;
     if (!show) return;
     const clamp = (x: number) => Math.min(1, Math.max(0, x)),
       sm = (x: number) => x * x * (3 - 2 * x);
-    // Parents stand calmly; they turn to their child while the child pays respect.
+    // Parents go about their jobs, and turn to their child while the child pays respect.
     this.parents.forEach((p, i) => {
       const h = this.homage[i],
         c = this.children[i];
-      const face = h
-        ? Math.atan2(c.pos.x - p.pos.x, c.pos.z - p.pos.z)
-        : p.heading;
+      let pose = "",
+        face = p.heading;
+      p.walking = false;
+      if (h) {
+        face = Math.atan2(c.pos.x - p.pos.x, c.pos.z - p.pos.z);
+        pose = t - h.start > 0.6 ? "happy" : "";
+      } else if (watching) {
+        pose = "watching";
+      } else if (i === 0) {
+        // Flower seller: arranging blooms at the stall beside them.
+        face = Math.atan2(this.stallAt.x - p.pos.x, this.stallAt.z - p.pos.z);
+        pose = "arrange";
+      } else if (i === 2) {
+        // Sweeper: paces slowly to and fro across the leaves while sweeping.
+        const rx = Math.cos(p.heading),
+          rz = -Math.sin(p.heading),
+          off = this.calm ? 0 : Math.sin(t * 0.22) * 1.3;
+        p.pos = { x: p.home.x + rx * off, z: p.home.z + rz * off };
+        face = p.heading + 0.9;
+        pose = "sweep";
+      } else {
+        // Stroller: wanders the garden, coming back home now and then.
+        if (!p.path.length && t >= p.until) {
+          const atHome =
+            Math.hypot(p.pos.x - p.home.x, p.pos.z - p.home.z) < 0.5;
+          const to = atHome
+            ? WANDER[Math.floor(Math.random() * WANDER.length)]
+            : p.home;
+          p.path = findPath(p.pos, to) ?? [to];
+        }
+        const target = p.path[0];
+        if (target) {
+          const dx = target.x - p.pos.x,
+            dz = target.z - p.pos.z,
+            d = Math.hypot(dx, dz);
+          if (d < 0.2) {
+            p.path.shift();
+            if (!p.path.length) p.until = t + 4 + Math.random() * 4;
+          } else {
+            const step = Math.min(d, 1.3 * dt);
+            p.pos = {
+              x: p.pos.x + (dx / d) * step,
+              z: p.pos.z + (dz / d) * step,
+            };
+            p.walking = true;
+            let dh = Math.atan2(dx, dz) - p.heading;
+            dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+            p.heading += dh * Math.min(1, dt * 8);
+          }
+        }
+        face = p.heading;
+      }
+      p.rig.root.position.set(p.pos.x, 0, p.pos.z);
       p.rig.root.rotation.y = face;
       animateRig(p.rig, {
-        walking: false,
-        pose: watching ? "watching" : h && t - h.start > 0.6 ? "happy" : "",
+        walking: p.walking,
+        pose,
         t,
         phase: i * 2.1,
-        calm: true, // a gentle, still stance
+        calm: this.calm,
       });
     });
     for (const w of this.worshippers) {
@@ -4191,10 +4431,15 @@ export class FestivalWorld {
     }
   };
   private updatePlayer(dt: number, t: number, watching: boolean) {
-    if (this.updateRite(t)) return;
-    if (this.updateGift(t)) return;
-    if (this.updateSeat(t, watching)) return;
-    if (this.updateLotus(t)) return;
+    if (
+      this.updateRite(t) ||
+      this.updateGift(t) ||
+      this.updateSeat(t, watching) ||
+      this.updateLotus(t)
+    ) {
+      this.faceOffset = 0; // special moments always face the way they were designed
+      return;
+    }
     const k = this.keys;
     const turn =
       Number(k.has("ArrowLeft") || k.has("a")) -
@@ -4241,7 +4486,7 @@ export class FestivalWorld {
     this.walking = active && (turn !== 0 || move !== 0 || autoStep);
     if (active && turn) this.heading += turn * 2.3 * dt;
     if (active && move) {
-      const v = move > 0 ? 5.2 : 3;
+      const v = move > 0 ? 5.2 : 3.6;
       this.pos = moveCharacter(
         this.pos,
         Math.sin(this.heading) * v * dt * move,
@@ -4264,8 +4509,17 @@ export class FestivalWorld {
       this.events.onMove({ ...this.pos }, this.heading);
     }
     if (!this.player) return;
+    // Walking backward: the character turns round to face the way they go (the camera stays
+    // put), and turns forward again when walking forward or following a path.
+    const wantFace =
+      active && move < 0
+        ? Math.PI
+        : (active && move > 0) || autoStep
+          ? 0
+          : this.faceOffset;
+    this.faceOffset += (wantFace - this.faceOffset) * Math.min(1, dt * 9);
     this.player.root.position.set(this.pos.x, 0, this.pos.z);
-    this.player.root.rotation.y = this.heading;
+    this.player.root.rotation.y = this.heading + this.faceOffset;
     animateRig(this.player, {
       walking: this.walking && (move !== 0 || autoStep),
       pose: watching ? "watching" : this.pose,
@@ -4388,14 +4642,18 @@ export class FestivalWorld {
       const greeting = ci === this.nearChild;
       // By day: each time a child comes round to their parent, they kneel and pay respect.
       const day = this.dayT > 0.5;
+      const par0 = this.parents[ci];
       if (
         day &&
         this.lastSeg[ci] !== c.seg &&
         c.seg === 0 &&
         !greeting &&
-        !watching
-      )
+        !watching &&
+        Math.hypot(par0.pos.x - c.pos.x, par0.pos.z - c.pos.z) < 3.5
+      ) {
         this.homage[ci] = { start: t };
+        par0.path = []; // a strolling parent stops for the child
+      }
       this.lastSeg[ci] = c.seg;
       const hom = day ? this.homage[ci] : null;
       if (hom && t - hom.start > 3.8) this.homage[ci] = null;

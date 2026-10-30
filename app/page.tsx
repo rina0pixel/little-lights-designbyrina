@@ -357,6 +357,13 @@ const CHILD_GREETINGS: [string, string][] = [
   ["Tonight is very beautiful!", "ဒီည အရမ်းလှတယ်။"],
 ];
 
+/** The player's reply to each child's greeting, [English, Burmese]. */
+const CHILD_REPLIES: [string, string][] = [
+  ["Thank you, you too! ♡", "ကျေးဇူးပါ၊ သင်လည်း ပျော်ပါစေ။ ♡"],
+  ["Happy Thadingyut to you too!", "သင့်ကိုလည်း ပျော်ရွှင်ဖွယ် သီတင်းကျွတ်ပါ။"],
+  ["It really is! ✨", "ဟုတ်တယ်၊ အရမ်းလှတယ်နော်။ ✨"],
+];
+
 /** Owner credit, kept small and quiet: page footer, welcome dialog and end-of-evening dialog. */
 const OWNER_URL = "https://designwithrina.com";
 function Credit({ lead }: { lead?: string }) {
@@ -418,6 +425,14 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, ready]);
   const [nearChild, SetNearChild] = useState<number | null>(null);
+  // A moment after a child greets the player, the player answers.
+  const [reply, SetReply] = useState<number | null>(null);
+  useEffect(() => {
+    SetReply(null);
+    if (nearChild === null) return;
+    const id = setTimeout(() => SetReply(nearChild), 1300);
+    return () => clearTimeout(id);
+  }, [nearChild]);
   // While the player eats, the table chats: one line every couple of seconds.
   const [chat, SetChat] = useState(-1);
   useEffect(() => {
@@ -1114,6 +1129,11 @@ export default function Home() {
             <div className="anchor person-anchor" data-anchor="player">
               <div className="label-stack">
                 {chatLine("player")}
+                {reply !== null && nearChild === reply && !watching && (
+                  <span className="bubble chat-bubble player-reply">
+                    {t(CHILD_REPLIES[reply][0], CHILD_REPLIES[reply][1])}
+                  </span>
+                )}
                 {watching && (
                   <span className="sky-reaction">
                     {t("So magical!", "အံ့ဩစရာလေး။")}
