@@ -641,13 +641,20 @@ export default function Home() {
       return;
     }
     if (id === "candles") {
-      C(true);
-      T(
-        t(
-          "May your days be filled with light.",
-          "နေ့ရက်တိုင်း အလင်းရောင်တွေနဲ့ ပြည့်ပါစေ။",
-        ),
-      );
+      const done = () => {
+        C(true);
+        complete("candles");
+        T(
+          t(
+            "May your days be filled with light.",
+            "နေ့ရက်တိုင်း အလင်းရောင်တွေနဲ့ ပြည့်ပါစေ။",
+          ),
+        );
+      };
+      // Kneel at the pagoda and light the first candle, then the rest follow.
+      if (candles || !world.current) done();
+      else if (!world.current.lightingCandles) world.current.lightCandles(done);
+      return;
     }
     if (id === "eat") {
       if (!arrived && !isNearTable(pos)) {
@@ -1192,16 +1199,15 @@ export default function Home() {
             aria-labelledby="dialog-title"
             className={"modal " + (modal === "wishes" ? "wish-list" : "")}
           >
-            <button
-              className="close"
-              aria-label="Close dialog"
-              onClick={() => {
-                if (modal === "welcome" && !started) return;
-                M("");
-              }}
-            >
-              <X size={20} />
-            </button>
+            {modal !== "welcome" && (
+              <button
+                className="close"
+                aria-label="Close dialog"
+                onClick={() => M("")}
+              >
+                <X size={20} />
+              </button>
+            )}
             {modal === "welcome" ? (
               <>
                 <span className="modal-spark">✧</span>
@@ -1298,12 +1304,6 @@ export default function Home() {
                   }}
                 >
                   {t("Light the lanterns", "မီးပုံးထွန်းမယ်")} ✧
-                </button>
-                <button
-                  className="primary firework-shop-button"
-                  onClick={() => M("fireworks")}
-                >
-                  {t("Choose fireworks", "မီးပန်းရွေးမယ်")} ✺
                 </button>
               </>
             ) : modal === "fireworks" ? (

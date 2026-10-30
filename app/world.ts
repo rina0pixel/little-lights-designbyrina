@@ -26,6 +26,8 @@ export type WorldWish = {
   shape?: number | null;
 };
 export type PlayerPose = "" | "eating" | "giving";
+/** Where the player kneels to light the first candle, in front of the pagoda. */
+const KNEEL = { x: 0, z: PAGODA.z + 7.55 };
 type Events = {
   onMove: (p: Position, heading: number) => void;
   onWishClick: (id: string) => void;
@@ -177,6 +179,7 @@ type Rig = {
   plate: THREE.Group;
   riceBall: THREE.Mesh;
   gift: THREE.Group;
+  taper: THREE.Group;
 };
 const stripeCache = new Map<string, THREE.Texture>();
 function longyiTexture(color: string) {
@@ -366,12 +369,54 @@ function makePerson(color: string, style: number, scale = 1): Rig {
   gift.position.set(0, -0.48, 0.04);
   gift.visible = false;
   armR.add(gift);
+  // A small lit taper the player holds while lighting the pagoda candles.
+  const taper = new THREE.Group();
+  taper.add(
+    mesh(
+      new THREE.CylinderGeometry(0.018, 0.018, 0.26, 6),
+      std("#fbefd2"),
+      0,
+      -0.1,
+      0,
+    ),
+  );
+  taper.add(
+    mesh(
+      new THREE.ConeGeometry(0.035, 0.1, 8),
+      new THREE.MeshBasicMaterial({ color: "#ffd773" }),
+      0,
+      -0.27,
+      0,
+    ),
+  );
+  taper.children[1].rotation.x = Math.PI; // flame tip points out along the taper
+  const tg = glow("#ffbe5c", 0.55, 0.9);
+  tg.position.set(0, -0.27, 0);
+  taper.add(tg);
+  taper.rotation.x = -0.6; // held tilted forward, so it points up and out when reaching
+  taper.position.set(0, -0.44, 0.03);
+  taper.visible = false;
+  armR.add(taper);
   root.scale.setScalar(scale);
-  return { root, body, head, armL, armR, legL, legR, plate, riceBall, gift };
+  return {
+    root,
+    body,
+    head,
+    armL,
+    armR,
+    legL,
+    legR,
+    plate,
+    riceBall,
+    gift,
+    taper,
+  };
 }
 type RigState = {
   walking: boolean;
   pose: string;
+  kneel?: number; // 0 standing → 1 kneeling
+  reach?: number; // 0 arm down → 1 arm reaching forward with the taper
   t: number;
   phase: number;
   calm: boolean;
@@ -390,7 +435,25 @@ function animateRig(r: Rig, s: RigState) {
   r.armL.rotation.x = -swing * 0.8;
   r.armR.rotation.x = swing * 0.8;
   r.head.rotation.x = 0;
-  r.plate.visible = r.riceBall.visible = r.gift.visible = false;
+  r.plate.visible =
+    r.riceBall.visible =
+    r.gift.visible =
+    r.taper.visible =
+      false;
+  if (s.pose === "kneel") {
+    // Kneel on the ground (legs tucked back), lean in and reach the taper to a candle.
+    const k = s.kneel ?? 1,
+      reach = s.reach ?? 0;
+    r.legL.rotation.x = r.legR.rotation.x = 1.45 * k;
+    r.body.position.y = -0.3 * k;
+    r.body.rotation.x = 0.12 * k + 0.1 * reach;
+    r.armL.rotation.x = -0.35 * k;
+    r.armR.rotation.x = -0.2 - 1.15 * reach;
+    r.taper.visible = true;
+    r.head.rotation.x = 0.25 * k;
+    return;
+  }
+  r.body.rotation.x = 0;
   if (s.pose === "watching") {
     r.head.rotation.x = -0.5;
     r.armL.rotation.x = r.armR.rotation.x = -0.15;
@@ -783,6 +846,13 @@ export class FestivalWorld {
   private candleLight!: THREE.PointLight;
   private lit = false;
   private candles = false;
+  private candleBits: THREE.Object3D[][] = [];
+  private rite: {
+    start: number;
+    from: { x: number; z: number; h: number };
+    lit: boolean[];
+    onDone?: () => void;
+  } | null = null;
   private spotRings: Record<string, THREE.Mesh> = {};
   private clouds: THREE.Group[] = [];
   // Fairy lights (tree wires, arch, shop eaves) are gathered while building, then drawn as one point cloud.
@@ -937,8 +1007,85 @@ export class FestivalWorld {
   }
   setCandles(v: boolean) {
     this.candles = v;
-    this.candleFlames.visible = v;
+    if (this.rite && v) return; // the lighting moment is in charge
+    for (const b of this.candleBits) for (const o of b) o.visible = v;
     this.candleLight.intensity = v ? 120 : 0;
+  }
+  /**
+   * The candle-lighting moment: the player kneels at the pagoda, lights the first candle with a
+   * taper (about 2 s in), then the light passes around the ring until every candle glows.
+   */
+  lightCandles(onDone?: () => void) {
+    if (this.rite) return;
+    this.route = null;
+    this.keys.clear();
+    this.rite = {
+      start: this.time,
+      from: { x: this.pos.x, z: this.pos.z, h: this.heading },
+      lit: this.candleBits.map(() => false),
+      onDone,
+    };
+  }
+  get lightingCandles() {
+    return !!this.rite;
+  }
+  /** Runs the candle moment each frame. Returns true while it controls the player. */
+  private updateRite(t: number) {
+    const r = this.rite;
+    if (!r || !this.player) return false;
+    const e = t - r.start,
+      ease = (x: number) => x * x * (3 - 2 * x),
+      clamp = (x: number) => Math.min(1, Math.max(0, x));
+    // 0–0.7 s: step up to the candles and face the pagoda.
+    const w = ease(clamp(e / 0.7));
+    this.pos = {
+      x: r.from.x + (KNEEL.x - r.from.x) * w,
+      z: r.from.z + (KNEEL.z - r.from.z) * w,
+    };
+    let dh = Math.PI - r.from.h;
+    dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    this.heading = r.from.h + dh * w;
+    // 0.7–1.2 s kneel, 1.2–2.0 s reach in, first candle lights at 2.1 s, arm back by 2.9 s,
+    // the rest light in a wave from 3.0 s, stand up 4.4–4.9 s.
+    const kneel =
+      ease(clamp((e - 0.7) / 0.5)) * (1 - ease(clamp((e - 4.4) / 0.5)));
+    const reach =
+      ease(clamp((e - 1.2) / 0.8)) * (1 - ease(clamp((e - 2.4) / 0.5)));
+    const light = (i: number) => {
+      if (r.lit[i]) return;
+      r.lit[i] = true;
+      for (const o of this.candleBits[i]) o.visible = true;
+    };
+    if (e >= 2.1) light(0);
+    const n = this.candleBits.length;
+    for (let i = 1; i < n; i++) {
+      const steps = Math.min(i, n - i); // spread both ways round the ring
+      if (e >= 3.0 + (steps / (n / 2)) * 1.1) light(i);
+    }
+    const count = r.lit.filter(Boolean).length;
+    const target = count === 0 ? 0 : count === 1 ? 35 : 35 + (85 * count) / n;
+    this.candleLight.intensity += (target - this.candleLight.intensity) * 0.2;
+    this.player.root.position.set(this.pos.x, 0, this.pos.z);
+    this.player.root.rotation.y = this.heading;
+    animateRig(this.player, {
+      walking: e < 0.7 && w < 0.98,
+      pose: e < 0.7 ? "" : "kneel",
+      kneel,
+      reach,
+      t,
+      phase: 0,
+      calm: this.calm,
+    });
+    if (e >= 5) {
+      this.rite = null;
+      this.candles = true;
+      this.candleLight.intensity = 120;
+      for (const b of this.candleBits) for (const o of b) o.visible = true;
+      this.lastSent.at = -1;
+      this.events.onMove({ ...this.pos }, this.heading);
+      r.onDone?.();
+    }
+    return true;
   }
   get position() {
     return { ...this.pos };
@@ -1016,7 +1163,7 @@ export class FestivalWorld {
     for (const vp of viewpoints) {
       let d = Math.atan2(vp[0] - PAGODA.x, vp[1] - PAGODA.z) - playerDir;
       d = Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
-      if (d < bestDiff) (bestDiff = d), (best = vp);
+      if (d < bestDiff) ((bestDiff = d), (best = vp));
     }
     const narrow = this.camera.aspect < 1.2;
     const camPos = new THREE.Vector3(best[0], narrow ? 3.4 : 3.1, best[1]);
@@ -1629,12 +1776,14 @@ export class FestivalWorld {
         x = Math.sin(a) * 6.7,
         z = Math.cos(a) * 6.7;
       g.add(mesh(candleGeo, wax, x, 0.75, z));
-      this.candleFlames.add(mesh(flameGeo, flameMat, x, 0.98, z));
+      const flame = mesh(flameGeo, flameMat, x, 0.98, z);
+      this.candleFlames.add(flame);
       const gl = glow("#ffbe5c", 1.1, 0.9);
       gl.position.set(x, 1.0, z);
       this.candleFlames.add(gl);
+      flame.visible = gl.visible = false;
+      this.candleBits.push([flame, gl]);
     }
-    this.candleFlames.visible = false;
     g.add(this.candleFlames);
     this.candleLight = new THREE.PointLight("#ffbf6b", 0, 22, 1.6);
     this.candleLight.position.set(0, 2.2, 7.5);
@@ -2905,6 +3054,30 @@ export class FestivalWorld {
       2.5,
       this.pos.z + Math.cos(yaw) * 6,
     );
+    // Candle moment: a close, low three-quarter view from the side so the kneel and the
+    // first flame are easy to see, easing in and back out again.
+    if (this.rite) {
+      const e = this.time - this.rite.start,
+        s = (x: number) => x * x * (3 - 2 * x),
+        f =
+          s(Math.min(1, Math.max(0, e / 0.9))) *
+          (1 - s(Math.min(1, Math.max(0, (e - 4.3) / 0.7))));
+      const side = 1.45, // a side profile from just outside the candle ring
+        cx = KNEEL.x - Math.sin(side) * 4.6,
+        cz = KNEEL.z - Math.cos(side) * 4.6,
+        tx = KNEEL.x,
+        tz = KNEEL.z - 0.45;
+      out.set(
+        out.x + (cx - out.x) * f,
+        out.y + (2.0 - out.y) * f,
+        out.z + (cz - out.z) * f,
+      );
+      target.set(
+        target.x + (tx - target.x) * f,
+        target.y + (0.9 - target.y) * f,
+        target.z + (tz - target.z) * f,
+      );
+    }
   }
   private snapCamera() {
     this.desiredCamera(this.camPos, this.camTarget);
@@ -2937,6 +3110,7 @@ export class FestivalWorld {
     }
   };
   private updatePlayer(dt: number, t: number, watching: boolean) {
+    if (this.updateRite(t)) return;
     const k = this.keys;
     const turn =
       Number(k.has("ArrowLeft") || k.has("a")) -
