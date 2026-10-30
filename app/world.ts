@@ -17,6 +17,7 @@ import {
   TABLE,
   moveCharacter,
   type Position,
+  isWalkable,
 } from "./movement";
 
 export type WorldWish = {
@@ -1036,8 +1037,9 @@ export class FestivalWorld {
     const e = t - r.start,
       ease = (x: number) => x * x * (3 - 2 * x),
       clamp = (x: number) => Math.min(1, Math.max(0, x));
-    // 0–0.7 s: step up to the candles and face the pagoda.
-    const w = ease(clamp(e / 0.7));
+    // 0–0.7 s: step up to the candles and face the pagoda; 4.8–5.4 s: step back to where the
+    // player started (the kneeling spot is inside the pagoda's walking boundary).
+    const w = ease(clamp(e / 0.7)) * (1 - ease(clamp((e - 4.8) / 0.6)));
     this.pos = {
       x: r.from.x + (KNEEL.x - r.from.x) * w,
       z: r.from.z + (KNEEL.z - r.from.z) * w,
@@ -1068,16 +1070,18 @@ export class FestivalWorld {
     this.player.root.position.set(this.pos.x, 0, this.pos.z);
     this.player.root.rotation.y = this.heading;
     animateRig(this.player, {
-      walking: e < 0.7 && w < 0.98,
-      pose: e < 0.7 ? "" : "kneel",
+      walking: (e < 0.7 && w < 0.98) || (e > 4.85 && e < 5.4),
+      pose: e < 0.7 || e > 4.85 ? "" : "kneel",
       kneel,
       reach,
       t,
       phase: 0,
       calm: this.calm,
     });
-    if (e >= 5) {
+    if (e >= 5.4) {
       this.rite = null;
+      // Always finish on walkable ground so the player can move away.
+      this.pos = isWalkable(r.from) ? { x: r.from.x, z: r.from.z } : { x: KNEEL.x, z: KNEEL.z + 2.2 };
       this.candles = true;
       this.candleLight.intensity = 120;
       for (const b of this.candleBits) for (const o of b) o.visible = true;
