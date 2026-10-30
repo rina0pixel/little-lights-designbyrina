@@ -153,6 +153,50 @@ function glowTexture() {
   });
   return glowTex;
 }
+/** A soft, puffy night cloud: lavender body, moonlit top edge, fading at the base. */
+function cloudTexture(variant: number) {
+  return canvasTexture(256, 112, (g) => {
+    const puffs = (
+      [
+        [
+          [70, 66, 34],
+          [112, 50, 42],
+          [158, 58, 36],
+          [196, 70, 26],
+          [130, 76, 30],
+        ],
+        [
+          [60, 70, 26],
+          [100, 56, 34],
+          [146, 46, 40],
+          [190, 64, 30],
+        ],
+        [
+          [84, 64, 30],
+          [128, 52, 38],
+          [170, 66, 28],
+        ],
+      ] as [number, number, number][][]
+    )[variant];
+    for (const [x, y, r] of puffs) {
+      const body = g.createRadialGradient(x, y - r * 0.35, r * 0.1, x, y, r);
+      body.addColorStop(0, "rgba(206,204,240,0.95)");
+      body.addColorStop(0.55, "rgba(150,150,205,0.75)");
+      body.addColorStop(1, "rgba(120,120,185,0)");
+      g.fillStyle = body;
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    // Fade the flat underside so the cloud sits softly in the sky.
+    g.globalCompositeOperation = "destination-out";
+    const base = g.createLinearGradient(0, 70, 0, 112);
+    base.addColorStop(0, "rgba(0,0,0,0)");
+    base.addColorStop(1, "rgba(0,0,0,1)");
+    g.fillStyle = base;
+    g.fillRect(0, 0, 256, 112);
+  });
+}
 let starTex: THREE.Texture | null = null;
 function starTexture() {
   if (starTex) return starTex;
@@ -1088,6 +1132,15 @@ export class FestivalWorld {
   } | null = null;
   private spotRings: Record<string, THREE.Mesh> = {};
   private clouds: THREE.Group[] = [];
+  /** Small, soft moonlit clouds that drift slowly around the sky. */
+  private puffs: {
+    s: THREE.Sprite;
+    a: number;
+    r: number;
+    y: number;
+    speed: number;
+    bob: number;
+  }[] = [];
   // Fairy lights (tree wires, arch, shop eaves) are gathered while building, then drawn as one point cloud.
   private fairyPos: number[] = [];
   private fairyCol: number[] = [];
@@ -1983,6 +2036,32 @@ export class FestivalWorld {
       c.position.set(-110 + i * 34, 42 + (i % 3) * 7, -95 + (i % 2) * 20);
       this.clouds.push(c);
       this.scene.add(c);
+    }
+    // Small soft clouds, lit by the moon on top, drifting slowly around the whole sky.
+    const looks = [0, 1, 2].map((v) => cloudTexture(v));
+    for (let i = 0; i < 16; i++) {
+      const tex = looks[i % 3],
+        w = 10 + ((i * 37) % 5),
+        mat = new THREE.SpriteMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.55 + ((i * 13) % 4) * 0.07,
+          depthWrite: false,
+          fog: false,
+        });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(w, w * 0.42, 1);
+      sp.renderOrder = -1;
+      const puff = {
+        s: sp,
+        a: (i / 16) * Math.PI * 2 + (i % 2) * 0.2,
+        r: 48 + ((i * 7) % 4) * 5,
+        y: 17 + ((i * 5) % 5) * 1.6,
+        speed: 0.0045 + ((i * 3) % 4) * 0.0012,
+        bob: i * 1.7,
+      };
+      this.puffs.push(puff);
+      this.scene.add(sp);
     }
   }
   private buildGround() {
@@ -4146,6 +4225,14 @@ export class FestivalWorld {
         c.position.x += dt * 1.2;
         if (c.position.x > 130) c.position.x = -130;
       }
+    for (const p of this.puffs) {
+      if (!this.calm) p.a += dt * p.speed;
+      p.s.position.set(
+        Math.cos(p.a) * p.r,
+        p.y + (this.calm ? 0 : Math.sin(t * 0.15 + p.bob) * 0.4),
+        Math.sin(p.a) * p.r,
+      );
+    }
     for (const [id, ring] of Object.entries(this.spotRings)) {
       const near =
         Math.hypot(this.pos.x - SPOTS[id].x, this.pos.z - SPOTS[id].z) < 5;
