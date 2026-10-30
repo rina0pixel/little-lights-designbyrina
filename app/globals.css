@@ -269,3 +269,6 @@ html[lang="my"] .modal h2{line-height:1.6}
 @keyframes chat-pop{from{opacity:0;transform:translateY(6px) scale(.85)}}
 @media (prefers-reduced-motion: reduce){.person-anchor .chat-bubble{animation:none}}
 @media(max-width:800px){.person-anchor .chat-bubble{font-size:10px;padding:5px 9px}}
+
+/* Eating together: fade the spot markers and edge pointers so the table scene stays clear. */
+.scene.eating-together [data-anchor^="spot-"],.scene.eating-together [data-edge]{opacity:0;pointer-events:none;transition:opacity .4s}

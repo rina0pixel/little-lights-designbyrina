@@ -187,6 +187,8 @@ type Rig = {
   riceBall: THREE.Mesh;
   gift: THREE.Group;
   taper: THREE.Group;
+  skirt: THREE.Mesh;
+  lap: THREE.Mesh;
 };
 const stripeCache = new Map<string, THREE.Texture>();
 function longyiTexture(color: string) {
@@ -245,15 +247,27 @@ function makePerson(color: string, style: number, scale = 1): Rig {
   };
   const legL = leg(-0.11),
     legR = leg(0.11);
-  body.add(
-    mesh(
-      new THREE.CylinderGeometry(0.25, 0.34, 0.62, 18),
-      std(color, { map: longyiTexture(color) }),
-      0,
-      0.5,
-      0,
-    ),
+  const longyi = std(color, { map: longyiTexture(color) });
+  const skirt = mesh(
+    new THREE.CylinderGeometry(0.25, 0.34, 0.62, 18),
+    longyi,
+    0,
+    0.5,
+    0,
   );
+  body.add(skirt);
+  // The lap (thighs wrapped in the longyi), shown only when sitting.
+  const lap = mesh(
+    new THREE.CapsuleGeometry(0.2, 0.3, 4, 12),
+    longyi,
+    0,
+    0.4,
+    0.22,
+  );
+  lap.rotation.x = Math.PI / 2;
+  lap.scale.set(1.35, 1, 0.9);
+  lap.visible = false;
+  body.add(lap);
   body.add(
     mesh(
       new THREE.CylinderGeometry(0.21, 0.27, 0.38, 18),
@@ -417,6 +431,8 @@ function makePerson(color: string, style: number, scale = 1): Rig {
     riceBall,
     gift,
     taper,
+    skirt,
+    lap,
   };
 }
 type RigState = {
@@ -434,12 +450,20 @@ type RigState = {
 };
 function animateRig(r: Rig, s: RigState) {
   animatePose(r, s);
-  if (s.seated) {
-    // Sitting on a stool: hips at stool height, legs forward under the table, plate on the table.
-    const k = s.seated === true ? 1 : s.seated;
-    r.body.position.y -= 0.04 * k;
-    r.body.rotation.x += 0.12 * k; // lean in towards the table
-    r.legL.rotation.x = r.legR.rotation.x = -1.5 * k;
+  // Sitting on a stool: the longyi gathers at the seat, the lap comes forward and the lower
+  // legs hang down from the knees. k blends sitting down and standing up.
+  const k = s.seated === true ? 1 : s.seated ? s.seated : 0;
+  r.skirt.scale.y = 1 - 0.45 * k;
+  r.skirt.position.y = 0.5 + 0.17 * k;
+  r.lap.visible = k > 0.05;
+  r.lap.scale.z = 0.9 * Math.max(0.05, k);
+  const kneeZ = 0.42 * k;
+  r.legL.position.set(-0.11, 0.32 + 0.06 * k, kneeZ);
+  r.legR.position.set(0.11, 0.32 + 0.06 * k, kneeZ);
+  if (k > 0) {
+    r.legL.rotation.x = r.legL.rotation.x * (1 - k);
+    r.legR.rotation.x = r.legR.rotation.x * (1 - k);
+    r.body.rotation.x += 0.1 * k; // lean in towards the table
     if (k > 0.5) r.plate.visible = false;
   }
 }
@@ -945,6 +969,8 @@ export class FestivalWorld {
     this.speaker = key;
   }
   private nearChild: number | null = null;
+  private myMeal: THREE.Group | null = null;
+  private coffeeSteam: THREE.Sprite | null = null;
   /** Sitting at the rice-ball table: sits down when the player starts eating. */
   private seat: {
     start: number;
@@ -953,6 +979,7 @@ export class FestivalWorld {
   private leaveSeat(quiet = false) {
     if (!this.seat) return;
     this.seat = null;
+    if (this.myMeal) this.myMeal.visible = false;
     this.pos = { ...TABLE_STAND };
     this.heading = 0; // facing away from the table, ready to walk off
     this.lastSent.at = -1;
@@ -1283,6 +1310,19 @@ export class FestivalWorld {
     let dh = TABLE_SEAT.heading - s.from.h;
     dh = Math.atan2(Math.sin(dh), Math.cos(dh));
     this.heading = s.from.h + dh * w;
+    if (this.myMeal) {
+      // The plate and cup appear just as the player sits down, with a small pop.
+      const m = clamp((e - 1.0) / 0.35);
+      this.myMeal.visible = m > 0;
+      this.myMeal.scale.setScalar(
+        m < 1 ? sm(m) * (1 + 0.15 * Math.sin(m * Math.PI)) : 1,
+      );
+      if (this.coffeeSteam) {
+        this.coffeeSteam.position.y = 1.12 + ((t * 0.25) % 0.25);
+        (this.coffeeSteam.material as THREE.SpriteMaterial).opacity =
+          0.35 * (1 - ((t * 0.25) % 0.25) / 0.25) * m;
+      }
+    }
     this.player.root.position.set(this.pos.x, 0, this.pos.z);
     this.player.root.rotation.y = this.heading;
     animateRig(this.player, {
@@ -2236,7 +2276,7 @@ export class FestivalWorld {
       FRIENDS.two,
       FRIENDS.three,
     ];
-    for (const seat of seats) {
+    for (const [si, seat] of seats.entries()) {
       const lx = seat.x - TABLE.x,
         lz = seat.z - TABLE.z,
         len = Math.hypot(lx, lz);
@@ -2266,24 +2306,79 @@ export class FestivalWorld {
         );
       const px = (lx / len) * 1.6,
         pz = (lz / len) * 1.6;
-      g.add(
+      // Seat 0 is the player's: their plate and cup appear only when they sit down to eat.
+      const meal = new THREE.Group();
+      meal.position.set(px, 0, pz);
+      meal.rotation.y = Math.atan2(lx, lz);
+      meal.add(
         mesh(
           new THREE.CylinderGeometry(0.24, 0.2, 0.03, 18),
           std("#f3ead6"),
-          px,
+          0,
           0.86,
-          pz,
+          0,
         ),
       );
-      g.add(
-        mesh(
-          new THREE.SphereGeometry(0.09, 10, 8),
-          std("#fff3dc"),
-          px + 0.05,
-          0.93,
-          pz,
-        ),
-      );
+      const riceMat = std("#fff3dc");
+      for (const [bx, bz] of si === 0
+        ? [
+            [-0.07, 0.03],
+            [0.08, 0.04],
+            [0, -0.08],
+          ]
+        : [[0.05, 0]])
+        meal.add(
+          mesh(new THREE.SphereGeometry(0.085, 10, 8), riceMat, bx, 0.93, bz),
+        );
+      if (si === 0) {
+        // A cup of coffee beside the plate, with a little curl of steam.
+        const cup = new THREE.Group();
+        cup.position.set(-0.42, 0, 0.06);
+        cup.add(
+          mesh(
+            new THREE.CylinderGeometry(0.075, 0.06, 0.15, 14),
+            std("#f7f1e3"),
+            0,
+            0.935,
+            0,
+          ),
+        );
+        cup.add(
+          mesh(
+            new THREE.CylinderGeometry(0.066, 0.066, 0.01, 14),
+            std("#5b3a26"),
+            0,
+            1.0,
+            0,
+          ),
+        );
+        const handle = mesh(
+          new THREE.TorusGeometry(0.04, 0.012, 6, 12),
+          std("#f7f1e3"),
+          -0.085,
+          0.94,
+          0,
+        );
+        handle.rotation.y = Math.PI / 2;
+        cup.add(handle);
+        cup.add(
+          mesh(
+            new THREE.CylinderGeometry(0.11, 0.11, 0.012, 16),
+            std("#f7f1e3"),
+            0,
+            0.865,
+            0,
+          ),
+        );
+        const steam = glow("#fff6e6", 0.35, 0.35);
+        steam.position.set(0, 1.12, 0);
+        cup.add(steam);
+        this.coffeeSteam = steam;
+        meal.add(cup);
+        meal.visible = false;
+        this.myMeal = meal;
+      }
+      g.add(meal);
     }
     g.add(
       mesh(
@@ -3400,6 +3495,27 @@ export class FestivalWorld {
       2.5,
       this.pos.z + Math.cos(yaw) * 6,
     );
+    // Eating together: a natural, slightly raised view across the table that frames the
+    // player and both friends, easing in as the player sits down.
+    if (this.seat) {
+      const e = this.time - this.seat.start,
+        s = (x: number) => x * x * (3 - 2 * x),
+        f = s(Math.min(1, Math.max(0, (e - 0.3) / 1.1)));
+      const narrow = this.camera.aspect < 1.2;
+      const cx = TABLE.x + (narrow ? 0.9 : 3.9),
+        cy = narrow ? 5 : 3.1,
+        cz = TABLE.z + (narrow ? 9.2 : 5.6);
+      out.set(
+        out.x + (cx - out.x) * f,
+        out.y + (cy - out.y) * f,
+        out.z + (cz - out.z) * f,
+      );
+      target.set(
+        target.x + (TABLE.x + (narrow ? 0 : -0.3) - target.x) * f,
+        target.y + (0.95 - target.y) * f,
+        target.z + (TABLE.z + 0.4 - target.z) * f,
+      );
+    }
     // Gift moment: a side view of the two friends so the hand-over and the thank-you are
     // easy to see, easing in while the player walks up and back out at the end.
     if (this.giftRite) {

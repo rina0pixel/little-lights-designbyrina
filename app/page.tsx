@@ -943,7 +943,11 @@ export default function Home() {
       <section className="game" aria-label="Interactive Thadingyut festival">
         <div
           ref={sceneRef}
-          className={"scene world" + (watching ? " watching-fireworks" : "")}
+          className={
+            "scene world" +
+            (watching ? " watching-fireworks" : "") +
+            (eating ? " eating-together" : "")
+          }
         >
           <div
             className="scene-note progress-chip"
