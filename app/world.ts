@@ -789,14 +789,16 @@ function animatePose(r: Rig, s: RigState) {
   }
   if (s.pose === "sweep") {
     // Sweeping with a long broom: lean forward, both hands low, swinging side to side.
-    const sw = s.calm ? 0 : Math.sin(t * 3.2);
-    r.body.rotation.x = 0.18;
-    r.body.rotation.y = sw * 0.2;
-    r.armL.rotation.x = -0.75;
-    r.armR.rotation.x = -0.55;
-    r.armL.rotation.z = -0.18 + 0.35 + sw * 0.12;
-    r.armR.rotation.z = 0.18 - 0.1 + sw * 0.12;
-    r.head.rotation.x = 0.3;
+    const sw = s.calm ? 0 : Math.sin(t * 2.2);
+    r.body.rotation.x = 0.2;
+    r.body.rotation.y = sw * 0.22;
+    // Both hands on the handle, one above the other, reaching forward and down.
+    r.armL.rotation.x = -0.95;
+    r.armR.rotation.x = -0.7;
+    r.armL.rotation.z = -0.18 + 0.5;
+    r.armR.rotation.z = 0.18 - 0.42;
+    r.head.rotation.x = 0.32;
+    r.head.rotation.y = -sw * 0.15; // eyes follow the bristles
     return;
   }
   if (s.pose === "wave") {
@@ -1240,6 +1242,81 @@ export class FestivalWorld {
   /** Day props for the parents' jobs: the flower stall and the swept leaves. */
   private dayProps: THREE.Object3D[] = [];
   private stallAt: Position = { x: 0, z: 0 };
+  /** The sweeper's broom and the leaves it pushes about. */
+  private broom: {
+    pivot: THREE.Group;
+    head: THREE.Mesh;
+    prev: THREE.Vector3 | null;
+  } | null = null;
+  private sweepLeaves: {
+    m: THREE.Mesh;
+    vx: number;
+    vz: number;
+    fall: number;
+  }[] = [];
+  private leafGroup: THREE.Group | null = null;
+  private nextLeafDrop = 0;
+  /** Move the leaves: pushed along by the bristles, sliding to rest, a new one drifting down now and then. */
+  private updateLeaves(dt: number, t: number, sweeping: boolean) {
+    const b = this.broom,
+      g = this.leafGroup;
+    if (!b || !g) return;
+    const head = b.head.getWorldPosition(new THREE.Vector3());
+    head.x -= g.position.x;
+    head.z -= g.position.z;
+    let hvx = 0,
+      hvz = 0;
+    if (b.prev && dt > 0) {
+      hvx = (head.x - b.prev.x) / dt;
+      hvz = (head.z - b.prev.z) / dt;
+    }
+    b.prev = head.clone();
+    const speed = Math.hypot(hvx, hvz);
+    for (const l of this.sweepLeaves) {
+      const p = l.m.position;
+      if (l.fall > 0) {
+        // Drifting down from the trees with a gentle sway.
+        l.fall = Math.max(0, l.fall - dt * 0.55);
+        p.y = 0.035 + l.fall;
+        p.x += Math.sin(t * 2.3 + l.fall * 5) * dt * 0.35;
+        l.m.rotation.z += dt * 2.5;
+        continue;
+      }
+      const d = Math.hypot(p.x - head.x, p.z - head.z);
+      if (sweeping && d < 0.42 && speed > 0.25) {
+        // Caught by the bristles: carried along in the direction of the stroke.
+        l.vx = hvx * 0.85;
+        l.vz = hvz * 0.85;
+      }
+      const v = Math.hypot(l.vx, l.vz);
+      if (v > 0.01) {
+        p.x += l.vx * dt;
+        p.z += l.vz * dt;
+        const k = Math.exp(-5 * dt);
+        l.vx *= k;
+        l.vz *= k;
+        l.m.rotation.z += v * dt * 4; // tumbling as it skids
+        p.y = 0.035 + Math.min(0.07, v * 0.03);
+        const r = Math.hypot(p.x, p.z);
+        if (r > 3.3) {
+          p.x *= 3.3 / r;
+          p.z *= 3.3 / r;
+          l.vx = l.vz = 0;
+        }
+      } else p.y = 0.035;
+    }
+    // Every few seconds a fresh leaf drifts down, so there is always something to sweep.
+    if (!this.calm && t > this.nextLeafDrop) {
+      this.nextLeafDrop = t + 4 + Math.random() * 3;
+      const l =
+        this.sweepLeaves[Math.floor(Math.random() * this.sweepLeaves.length)];
+      const a = Math.random() * Math.PI * 2,
+        r = 0.6 + Math.random() * 2.2;
+      l.m.position.set(Math.cos(a) * r, 1.6, Math.sin(a) * r);
+      l.fall = 1.55;
+      l.vx = l.vz = 0;
+    }
+  }
   /** Buying flowers and offering them at the pagoda (day mode). */
   private flower: {
     phase: "toSeller" | "handover" | "carry" | "toPagoda" | "offer";
@@ -1786,19 +1863,30 @@ export class FestivalWorld {
     const kneel = sm(clamp(e / 0.5)) * (1 - sm(clamp((e - 4.2) / 0.5)));
     const lower = sm(clamp((e - 0.6) / 0.9));
     const pray = sm(clamp((e - 1.7) / 0.5)) * (1 - sm(clamp((e - 3.9) / 0.4)));
-    if (e < 1.5)
+    if (e < 1.5) {
       f.prop.position.set(0, 0.86 - 0.66 * lower, 0.42 + 0.45 * lower);
-    else if (f.prop.parent === this.player.body) {
+      f.prop.rotation.set(1.45 * lower, 0, 0); // blooms tip forward, toward the pagoda
+    } else if (f.prop.parent === this.player.body) {
       // Let go: the bouquet stays on the ground in front of the pagoda.
       this.player.body.remove(f.prop);
       const n = this.offerings.children.length;
       const a = ((n % 7) - 3) * 0.06;
-      f.prop.position.set(
-        PAGODA.x + Math.sin(a) * 7.62,
-        0.02,
-        PAGODA.z + Math.cos(a) * 7.62,
+      // Stems towards the player, blooms resting towards the pagoda.
+      const base = new THREE.Vector3(
+        PAGODA.x + Math.sin(a) * 7.98,
+        0.06,
+        PAGODA.z + Math.cos(a) * 7.98,
       );
-      f.prop.rotation.set(Math.PI / 2 - 0.15, 0, (n % 3) * 0.4 - 0.4);
+      const toPagoda = new THREE.Vector3(
+        PAGODA.x - base.x,
+        0.12,
+        PAGODA.z - base.z,
+      ).normalize();
+      f.prop.position.copy(base);
+      f.prop.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        toPagoda,
+      );
       this.offerings.add(f.prop);
       while (this.offerings.children.length > 9)
         this.offerings.remove(this.offerings.children[0]);
@@ -4172,25 +4260,41 @@ export class FestivalWorld {
     const broom = new THREE.Group();
     broom.add(
       mesh(
-        new THREE.CylinderGeometry(0.025, 0.025, 1.3, 6),
-        std("#b88a55"),
+        new THREE.CylinderGeometry(0.035, 0.035, 1.3, 8),
+        std("#7d5530"),
         0,
         -0.55,
         0.05,
       ),
     );
     const head = mesh(
-      new THREE.ConeGeometry(0.16, 0.38, 10),
-      std("#d8c48a"),
+      new THREE.ConeGeometry(0.22, 0.5, 14),
+      std("#c9a14f", { roughness: 0.9 }),
       0,
       -1.25,
       0.05,
     );
     head.rotation.x = Math.PI;
+    head.scale.set(1.6, 1, 0.55); // a wide, flat fan of straw
+    // A band of twine where the straw is tied to the handle.
+    broom.add(
+      mesh(
+        new THREE.CylinderGeometry(0.06, 0.06, 0.06, 10),
+        std("#8a3f2b"),
+        0,
+        -1.02,
+        0.05,
+      ),
+    );
     broom.add(head);
-    broom.position.set(-0.12, -0.4, 0.12);
-    broom.rotation.x = 0.55;
-    rig.armR.add(broom);
+    // Held in both hands in front of the body; the handle tilts down so the bristles brush the
+    // ground about a metre ahead. The pivot swings it side to side (see updateDayPeople).
+    const pivot = new THREE.Group();
+    pivot.position.set(0, 0.82, 0.32);
+    broom.rotation.x = 0.82;
+    pivot.add(broom);
+    rig.body.add(pivot);
+    this.broom = { pivot, head, prev: null };
     const leaves = new THREE.Group();
     const cols = ["#b5752d", "#c99a3b", "#8f5a2a", "#d2a85a"];
     for (let k = 0; k < 34; k++) {
@@ -4209,6 +4313,7 @@ export class FestivalWorld {
       leaf.rotation.set(-Math.PI / 2, 0, a);
       leaf.scale.set(1, 1.6, 1);
       leaves.add(leaf);
+      this.sweepLeaves.push({ m: leaf, vx: 0, vz: 0, fall: 0 });
     }
     const fx = Math.sin(heading + 1.2),
       fz = Math.cos(heading + 1.2);
@@ -4228,6 +4333,7 @@ export class FestivalWorld {
       leaves.add(leaf);
     }
     leaves.position.set(at.x, 0, at.z);
+    this.leafGroup = leaves;
     leaves.visible = false;
     this.scene.add(leaves);
     this.dayProps.push(leaves);
@@ -4247,7 +4353,8 @@ export class FestivalWorld {
         c = this.children[i];
       let pose = "",
         face = p.heading,
-        reachSeller = 0;
+        reachSeller = 0,
+        sweeping = false;
       p.walking = false;
       if (h) {
         face = Math.atan2(c.pos.x - p.pos.x, c.pos.z - p.pos.z);
@@ -4275,6 +4382,7 @@ export class FestivalWorld {
         p.pos = { x: p.home.x + rx * off, z: p.home.z + rz * off };
         face = p.heading + 0.9;
         pose = "sweep";
+        sweeping = true;
       } else {
         // Stroller: wanders the garden, coming back home now and then.
         if (!p.path.length && t >= p.until) {
@@ -4317,6 +4425,14 @@ export class FestivalWorld {
         phase: i * 2.1,
         calm: this.calm,
       });
+      if (i === 2 && this.broom) {
+        // The broom sweeps in wide arcs across the ground in time with the body.
+        const sw = sweeping && !this.calm ? Math.sin(t * 2.2) : 0;
+        this.broom.pivot.rotation.y = sw * 0.62;
+        this.broom.pivot.rotation.x = sweeping ? 0 : -0.5; // held upright while pausing
+        p.rig.root.updateMatrixWorld(true);
+        this.updateLeaves(dt, t, sweeping);
+      }
     });
     for (const w of this.worshippers) {
       if (watching) {
